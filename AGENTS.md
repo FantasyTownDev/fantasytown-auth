@@ -25,22 +25,22 @@ Minecraft 皮肤站微内核（Yggdrasil 外置登录 + Web 账户注册），�
 
 **格式**：`<类型>[可选 范围]: <描述>`
 
-### 类型（Type）
+### 类型
 
 | 类型 | 说明 | SemVer |
 |---|---|---|
 | `feat` | 新功能 | MINOR |
 | `fix` | 修复 bug | PATCH |
 | `docs` | 文档修改 | - |
-| `style` | 代码样式（不影响逻辑） | - |
-| `refactor` | 重构（不修改功能） | - |
+| `style` | 代码样式修改 | - |
+| `refactor` | 重构 | - |
 | `perf` | 性能优化 | PATCH |
 | `test` | 测试用例 | - |
 | `build` | 构建系统/依赖 | - |
 | `ci` | CI 配置 | - |
 | `chore` | 非业务性修改 | - |
 
-### 范围（Scope）
+### 范围
 
 可选，用圆括号包围，描述变更的模块：
 - `auth` - 认证/授权相关
@@ -103,7 +103,7 @@ fix/db-concurrent-registration
 
 ### 提交规范
 
-- 分支内使用约定式提交（见上方 Conventional Commits 规范）
+- 分支内使用约定式提交（见上方规范）
 - 合并提交使用 squash merge，保留干净的提交历史
 
 ## Architecture
