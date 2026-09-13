@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Minecraft 皮肤站微内核（Yggdrasil 外置登录 + Web 账户注册），基于 .NET 10 / ASP.NET Core 10。
+Minecraft 皮肤站微内核，基于 .NET 10 / ASP.NET Core 10。
 
 ## Target Platforms
 
@@ -14,40 +14,40 @@ Minecraft 皮肤站微内核（Yggdrasil 外置登录 + Web 账户注册），�
 
 ## Critical Constraints
 
-- **设计文档冻结**：`.documents/NET10软件工程设计方案.md` (V5) 是唯一实现依据，改动须走评审
+- **设计文档冻结**：`.documents/NET10软件工程设计方案.md` V5 是唯一实现依据，改动须走评审
 - **防错清单**：实现任何机制前必查 `.documents/NET10实施指导.md` 第 4 章
 - **模块纪律**：模块间只经 `Shared/` 接口通信，禁止跨模块引用 DbSet
 - **不要 push**：未经允许不得 git push
 - **不要改规划**：未经允许不得更改设计文档中的冻结项
-- **本机环境**：Windows，MariaDB（已安装运行），Memurai（Redis 兼容，已运行），无 docker
+- **本机环境**：Windows，MariaDB 已运行，Memurai 已运行，无 docker
 
-## Conventional Commits 规范
+## Conventional Commits
 
-**格式**：`<类型>[可选 范围]: <描述>`
+**格式**：`<类型>[范围]: <描述>`
 
-### 类型（Type）
+### 类型
 
 | 类型 | 说明 | SemVer |
 |---|---|---|
 | `feat` | 新功能 | MINOR |
 | `fix` | 修复 bug | PATCH |
 | `docs` | 文档修改 | - |
-| `style` | 代码样式（不影响逻辑） | - |
-| `refactor` | 重构（不修改功能） | - |
+| `style` | 代码样式修改 | - |
+| `refactor` | 重构 | - |
 | `perf` | 性能优化 | PATCH |
 | `test` | 测试用例 | - |
 | `build` | 构建系统/依赖 | - |
 | `ci` | CI 配置 | - |
 | `chore` | 非业务性修改 | - |
 
-### 范围（Scope）
+### 范围
 
-可选，用圆括号包围，描述变更的模块：
-- `auth` - 认证/授权相关
-- `ygg` - Yggdrasil 协议相关
+可选，描述变更的模块：
+- `auth` - 认证/授权
+- `ygg` - Yggdrasil 协议
 - `admin` - 管理域
-- `cache` - Redis/缓存相关
-- `db` - 数据库/EF Core
+- `cache` - 缓存
+- `db` - 数据库
 - `api` - API 端点
 
 ### 破坏性变更
@@ -67,24 +67,24 @@ test(integration): add concurrent registration test
 
 ### 颗粒度要求
 
-- 精确到功能块（单个功能/修复/重构）
+- 精确到功能块
 - 一个提交只做一件事
 - 避免混合多个不相关的变更
 
-## Git 分支规范
+## Git Branching
 
 ### 分支模型
 
 | 分支 | 用途 | 命名规范 |
 |---|---|---|
-| `main` | 生产就绪代码，只接受 PR 合并 | `main` |
-| `develop` | 开发主线，集成各功能分支 | `develop` |
-| `feature/*` | 新功能开发 | `feature/<模块>-<简述>` |
+| `main` | 生产就绪代码 | `main` |
+| `develop` | 开发主线 | `develop` |
+| `feature/*` | 新功能 | `feature/<模块>-<简述>` |
 | `fix/*` | Bug 修复 | `fix/<模块>-<简述>` |
 | `hotfix/*` | 生产紧急修复 | `hotfix/<简述>` |
 | `release/*` | 发布准备 | `release/<版本号>` |
 
-### 分支命名示例
+### 命名示例
 
 ```
 feature/auth-register
@@ -96,19 +96,19 @@ fix/db-concurrent-registration
 
 ### 工作流程
 
-1. **功能开发**：从 `develop` 创建 `feature/*` 分支
-2. **完成开发**：PR 合并回 `develop`
-3. **发布准备**：从 `develop` 创建 `release/*`，测试通过后合并到 `main` 和 `develop`
-4. **热修复**：从 `main` 创建 `hotfix/*`，修复后同时合并到 `main` 和 `develop`
+1. 从 `develop` 创建 `feature/*`
+2. PR 合并回 `develop`
+3. 发布时从 `develop` 创建 `release/*`，合并到 `main` 和 `develop`
+4. 热修复从 `main` 创建 `hotfix/*`，同时合并到 `main` 和 `develop`
 
 ### 提交规范
 
-- 分支内使用约定式提交（见上方 Conventional Commits 规范）
-- 合并提交使用 squash merge，保留干净的提交历史
+- 使用约定式提交（见上方）
+- 合并使用 squash merge
 
 ## Architecture
 
-解决方案文件：`FantasyTown.Auth.slnx`（.NET 9+ 新格式）
+解决方案：`FantasyTown.Auth.slnx`
 
 垂直切片模块化单体，单部署单元：
 
@@ -120,55 +120,44 @@ Modules/
 Persistence/           # AuthDbContext, EF Migrations
 ```
 
-**关键约束**：Accounts 通过 `IPlayerDirectory`（Shared 接口）暴露给 Yggdrasil，禁止直接访问 DbSet。
+**关键约束**：Accounts 通过 `IPlayerDirectory` 暴露给 Yggdrasil，禁止直接访问 DbSet。
 
 ## External Dependencies
 
 | 服务 | 状态 | 用途 |
 |---|---|---|
-| MariaDB | 本机已安装运行 | 持久化（users/players/player_bans/auth_log 等六表） |
-| Memurai | 本机已运行（Redis 兼容） | 令牌/票据/计数/锁定/PERM·PLAYER 快照/DataProtection 密钥环 |
+| MariaDB | 已运行 | 持久化 |
+| Memurai | 已运行 | 缓存/会话/密钥环 |
 
-连接串：`appsettings.Development.json` 或环境变量。本机无 docker，使用本地服务。
+连接串：`appsettings.Development.json` 或环境变量。
 
-## Build & Test Commands
+## Build & Test
 
 ```bash
-# 还原依赖
 dotnet restore
-
-# 构建
 dotnet build
-
-# 运行单元测试（无需外部服务）
 dotnet test tests/FantasyTown.Auth.UnitTests
-
-# 运行集成测试（需要 MariaDB + Redis 本地服务）
 dotnet test tests/FantasyTown.Auth.IntegrationTests
-
-# 运行契约测试
 dotnet test tests/FantasyTown.Auth.ContractTests
-
-# EF 迁移
-dotnet ef migrations add <MigrationName> --project src/FantasyTown.Auth
+dotnet ef migrations add <Name> --project src/FantasyTown.Auth
 dotnet ef database update --project src/FantasyTown.Auth
 ```
 
-## Testing Conventions
+## Testing
 
-- **单元测试**：纯函数（PermissionRules, IsBanEffective, ManagementGuard），无外部依赖
-- **集成测试**：需要 MariaDB + Memurai 本地服务（无 docker，使用本地运行实例）
+- **单元测试**：纯函数，无外部依赖
+- **集成测试**：需要 MariaDB + Memurai
 - **契约测试**：Yggdrasil 协议 golden fixtures，逐字节比对
 
 ## Key Patterns
 
 - **Program.cs 装配顺序**：错误顺序 = 静默失效，严格按文档 §2.3
-- **Cookie**：`__Host-ft_auth`（__Host- 前缀 + Secure + HttpOnly + SameSite=Lax）
-- **权限判定**：白名单精确匹配（`is moderator => role is X or Y`），禁止 `>=`
-- **封禁判定**：`IsBanEffective(flag, until, nowUtc)` 时间谓词，bool 仅快速短路
-- **PERM 快照**：回源空结果 = 封禁等效哨兵（非 null、非 IsBanned=false）
+- **Cookie**：`__Host-ft_auth`
+- **权限判定**：白名单精确匹配，禁止 `>=`
+- **封禁判定**：`IsBanEffective(flag, until, nowUtc)` 时间谓词
+- **PERM 快照**：回源空结果 = 封禁等效哨兵
 
-## Frozen Items (Do Not Modify Without Review)
+## Frozen Items
 
 1. DB Schema：六表结构 + UNIQUE 约束 + auth_log 双索引
 2. Redis 键空间：13 类键名、TTL、语义
