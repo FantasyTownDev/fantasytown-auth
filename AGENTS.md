@@ -19,7 +19,7 @@ Minecraft 皮肤站微内核（Yggdrasil 外置登录 + Web 账户注册），�
 - **模块纪律**：模块间只经 `Shared/` 接口通信，禁止跨模块引用 DbSet
 - **不要 push**：未经允许不得 git push
 - **不要改规划**：未经允许不得更改设计文档中的冻结项
-- **本机环境**：Windows，MariaDB（已安装运行），Memurai（Redis 兼容，已运行），无 docker
+- **本机环境**：Windows，MariaDB（已安装运行），Memurai（Redis 官方合作 Windows 版本，已运行），无 docker
 
 ## Conventional Commits 规范
 
@@ -103,7 +103,7 @@ fix/db-concurrent-registration
 
 ### 提交规范
 
-- 分支内使用约定式提交（见上方规范）
+- 分支内使用约定式提交（见上方 Conventional Commits 规范）
 - 合并提交使用 squash merge，保留干净的提交历史
 
 ## Architecture
@@ -127,7 +127,7 @@ Persistence/           # AuthDbContext, EF Migrations
 | 服务 | 状态 | 用途 |
 |---|---|---|
 | MariaDB | 本机已安装运行 | 持久化（users/players/player_bans/auth_log 等六表） |
-| Memurai | 本机已运行（Redis 兼容） | 令牌/票据/计数/锁定/PERM·PLAYER 快照/DataProtection 密钥环 |
+| Memurai | 本机已运行（Redis 官方合作 Windows 版本） | 令牌/票据/计数/锁定/PERM·PLAYER 快照/DataProtection 密钥环 |
 
 连接串：`appsettings.Development.json` 或环境变量。本机无 docker，使用本地服务。
 
