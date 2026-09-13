@@ -4,6 +4,14 @@
 
 Minecraft 皮肤站微内核（Yggdrasil 外置登录 + Web 账户注册），基于 .NET 10 / ASP.NET Core 10。
 
+## Target Platforms
+
+| 系统 | 架构 | 支持 |
+|---|---|---|
+| Windows | x86, x64, ARM, ARM64 | ✅ |
+| Linux | x64, ARM, ARM64, ARMv8a | ✅ |
+| macOS / iOS | 任何 | ❌ 不支持 |
+
 ## Critical Constraints
 
 - **设计文档冻结**：`.documents/NET10软件工程设计方案.md` (V5) 是唯一实现依据，改动须走评审
@@ -11,7 +19,7 @@ Minecraft 皮肤站微内核（Yggdrasil 外置登录 + Web 账户注册），�
 - **模块纪律**：模块间只经 `Shared/` 接口通信，禁止跨模块引用 DbSet
 - **不要 push**：未经允许不得 git push
 - **不要改规划**：未经允许不得更改设计文档中的冻结项
-- **本机环境**：Windows，MariaDB（已安装运行），Redis（稍后本机部署），无 docker
+- **本机环境**：Windows，MariaDB（已安装运行），Memurai（Redis 兼容，已运行），无 docker
 
 ## Conventional Commits 规范
 
@@ -100,6 +108,8 @@ fix/db-concurrent-registration
 
 ## Architecture
 
+解决方案文件：`FantasyTown.Auth.slnx`（.NET 9+ 新格式）
+
 垂直切片模块化单体，单部署单元：
 
 ```
@@ -117,7 +127,7 @@ Persistence/           # AuthDbContext, EF Migrations
 | 服务 | 状态 | 用途 |
 |---|---|---|
 | MariaDB | 本机已安装运行 | 持久化（users/players/player_bans/auth_log 等六表） |
-| Redis | 待本机部署 | 令牌/票据/计数/锁定/PERM·PLAYER 快照/DataProtection 密钥环 |
+| Memurai | 本机已运行（Redis 兼容） | 令牌/票据/计数/锁定/PERM·PLAYER 快照/DataProtection 密钥环 |
 
 连接串：`appsettings.Development.json` 或环境变量。本机无 docker，使用本地服务。
 
@@ -147,7 +157,7 @@ dotnet ef database update --project src/FantasyTown.Auth
 ## Testing Conventions
 
 - **单元测试**：纯函数（PermissionRules, IsBanEffective, ManagementGuard），无外部依赖
-- **集成测试**：需要 MariaDB + Redis 本地服务（无 docker，使用本地运行实例）
+- **集成测试**：需要 MariaDB + Memurai 本地服务（无 docker，使用本地运行实例）
 - **契约测试**：Yggdrasil 协议 golden fixtures，逐字节比对
 
 ## Key Patterns
