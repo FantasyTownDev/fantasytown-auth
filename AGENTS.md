@@ -19,7 +19,7 @@ Minecraft 皮肤站微内核（Yggdrasil 外置登录 + Web 账户注册），�
 - **模块纪律**：模块间只经 `Shared/` 接口通信，禁止跨模块引用 DbSet
 - **不要 push**：未经允许不得 git push
 - **不要改规划**：未经允许不得更改设计文档中的冻结项
-- **本机环境**：Windows，MariaDB（竖MySQL分支，相对独立），Memurai（Redis 官方合作 Windows 版本），无 docker
+- **本机环境**：Windows，MariaDB（属MySQL分支，相对独立），Memurai（Redis 官方合作 Windows 版本），无 docker
 
 ## Conventional Commits 规范
 
