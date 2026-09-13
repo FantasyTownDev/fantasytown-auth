@@ -9,9 +9,58 @@ Minecraft 皮肤站微内核（Yggdrasil 外置登录 + Web 账户注册），�
 - **设计文档冻结**：`.documents/NET10软件工程设计方案.md` (V5) 是唯一实现依据，改动须走评审
 - **防错清单**：实现任何机制前必查 `.documents/NET10实施指导.md` 第 4 章
 - **模块纪律**：模块间只经 `Shared/` 接口通信，禁止跨模块引用 DbSet
-- **Git 规范**：使用约定式提交（conventional commits），颗粒度精确到功能块
 - **不要 push**：未经允许不得 git push
 - **不要改规划**：未经允许不得更改设计文档中的冻结项
+
+## Conventional Commits 规范
+
+**格式**：`<类型>[可选 范围]: <描述>`
+
+### 类型（Type）
+
+| 类型 | 说明 | SemVer |
+|---|---|---|
+| `feat` | 新功能 | MINOR |
+| `fix` | 修复 bug | PATCH |
+| `docs` | 文档修改 | - |
+| `style` | 代码样式（不影响逻辑） | - |
+| `refactor` | 重构（不修改功能） | - |
+| `perf` | 性能优化 | PATCH |
+| `test` | 测试用例 | - |
+| `build` | 构建系统/依赖 | - |
+| `ci` | CI 配置 | - |
+| `chore` | 非业务性修改 | - |
+
+### 范围（Scope）
+
+可选，用圆括号包围，描述变更的模块：
+- `auth` - 认证/授权相关
+- `ygg` - Yggdrasil 协议相关
+- `admin` - 管理域
+- `cache` - Redis/缓存相关
+- `db` - 数据库/EF Core
+- `api` - API 端点
+
+### 破坏性变更
+
+- 脚注：`BREAKING CHANGE: <描述>`
+- 或类型后加 `!`：`feat!: <描述>`
+
+### 示例
+
+```
+feat(auth): add Yggdrasil authenticate endpoint
+fix(cache): resolve PERM snapshot miss on soft-deleted user
+refactor(domain): extract PermissionRules to shared module
+docs: update AGENTS.md with commit conventions
+test(integration): add concurrent registration test
+```
+
+### 颗粒度要求
+
+- 精确到功能块（单个功能/修复/重构）
+- 一个提交只做一件事
+- 避免混合多个不相关的变更
 
 ## Architecture
 
