@@ -133,7 +133,7 @@ dotnet build
 # 运行单元测试（无需外部服务）
 dotnet test tests/FantasyTown.Auth.UnitTests
 
-# 运行集成测试（需要 MySQL + Redis 容器）
+# 运行集成测试（需要 MariaDB + Redis 本地服务）
 dotnet test tests/FantasyTown.Auth.IntegrationTests
 
 # 运行契约测试
