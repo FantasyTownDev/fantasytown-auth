@@ -11,6 +11,7 @@ Minecraft 皮肤站微内核（Yggdrasil 外置登录 + Web 账户注册），�
 - **模块纪律**：模块间只经 `Shared/` 接口通信，禁止跨模块引用 DbSet
 - **不要 push**：未经允许不得 git push
 - **不要改规划**：未经允许不得更改设计文档中的冻结项
+- **本机环境**：Windows，MariaDB（已安装运行），Redis（稍后本机部署），无 docker
 
 ## Conventional Commits 规范
 
@@ -62,6 +63,41 @@ test(integration): add concurrent registration test
 - 一个提交只做一件事
 - 避免混合多个不相关的变更
 
+## Git 分支规范
+
+### 分支模型
+
+| 分支 | 用途 | 命名规范 |
+|---|---|---|
+| `main` | 生产就绪代码，只接受 PR 合并 | `main` |
+| `develop` | 开发主线，集成各功能分支 | `develop` |
+| `feature/*` | 新功能开发 | `feature/<模块>-<简述>` |
+| `fix/*` | Bug 修复 | `fix/<模块>-<简述>` |
+| `hotfix/*` | 生产紧急修复 | `hotfix/<简述>` |
+| `release/*` | 发布准备 | `release/<版本号>` |
+
+### 分支命名示例
+
+```
+feature/auth-register
+feature/ygg-authenticate
+feature/admin-player-mgmt
+fix/cache-perm-snapshot
+fix/db-concurrent-registration
+```
+
+### 工作流程
+
+1. **功能开发**：从 `develop` 创建 `feature/*` 分支
+2. **完成开发**：PR 合并回 `develop`
+3. **发布准备**：从 `develop` 创建 `release/*`，测试通过后合并到 `main` 和 `develop`
+4. **热修复**：从 `main` 创建 `hotfix/*`，修复后同时合并到 `main` 和 `develop`
+
+### 提交规范
+
+- 分支内使用约定式提交（见上方 Conventional Commits 规范）
+- 合并提交使用 squash merge，保留干净的提交历史
+
 ## Architecture
 
 垂直切片模块化单体，单部署单元：
@@ -78,12 +114,12 @@ Persistence/           # AuthDbContext, EF Migrations
 
 ## External Dependencies
 
-| 服务 | 启动命令 |
-|---|---|
-| MySQL 8.0+ | `docker run -d -p 3306:3306 -e MYSQL_ROOT_PASSWORD=dev -e MYSQL_DATABASE=fantasytown_auth mysql:8` |
-| Redis 7+ | `docker run -d -p 6379:6379 redis:7` |
+| 服务 | 状态 | 用途 |
+|---|---|---|
+| MariaDB | 本机已安装运行 | 持久化（users/players/player_bans/auth_log 等六表） |
+| Redis | 待本机部署 | 令牌/票据/计数/锁定/PERM·PLAYER 快照/DataProtection 密钥环 |
 
-连接串：`appsettings.Development.json` 或环境变量。
+连接串：`appsettings.Development.json` 或环境变量。本机无 docker，使用本地服务。
 
 ## Build & Test Commands
 
@@ -110,8 +146,8 @@ dotnet ef database update --project src/FantasyTown.Auth
 
 ## Testing Conventions
 
-- **单元测试**：纯函数（PermissionRules, IsBanEffective, ManagementGuard），无容器依赖
-- **集成测试**：Testcontainers（Redis + MySQL），测试并发不变量
+- **单元测试**：纯函数（PermissionRules, IsBanEffective, ManagementGuard），无外部依赖
+- **集成测试**：需要 MariaDB + Redis 本地服务（无 docker，使用本地运行实例）
 - **契约测试**：Yggdrasil 协议 golden fixtures，逐字节比对
 
 ## Key Patterns
