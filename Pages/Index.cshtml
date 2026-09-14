@@ -1,0 +1,36 @@
+@page
+@{
+    ViewData["Title"] = "首页";
+}
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - FantasyTown Auth</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #1a1a2e; color: #e0e0e0; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+        .container { text-align: center; padding: 2rem; }
+        h1 { color: #00d4ff; font-size: 2.5rem; margin-bottom: 1rem; }
+        p { color: #a0a0a0; font-size: 1.1rem; margin-bottom: 2rem; }
+        .links { display: flex; gap: 1rem; justify-content: center; }
+        .links a { padding: 0.75rem 1.5rem; border-radius: 6px; text-decoration: none; font-weight: bold; transition: background 0.3s; }
+        .btn-login { background: #00d4ff; color: #1a1a2e; }
+        .btn-login:hover { background: #00b8d4; }
+        .btn-register { background: transparent; color: #00d4ff; border: 2px solid #00d4ff; }
+        .btn-register:hover { background: #00d4ff; color: #1a1a2e; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>FantasyTown Auth</h1>
+        <p>Minecraft 第三方认证服务</p>
+        <div class="links">
+            <a asp-page="/Account/Login" class="btn-login">登录</a>
+            <a asp-page="/Account/Register" class="btn-register">注册</a>
+        </div>
+    </div>
+</body>
+</html>
