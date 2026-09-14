@@ -61,11 +61,14 @@ using (var scope = app.Services.CreateScope())
             var pendingMigrations = await dbContext.Database.GetPendingMigrationsAsync();
             var pendingMigrationsList = pendingMigrations.ToList();
             
-            if (pendingMigrationsList.Any())
+            if (pendingMigrationsList.Count > 0)
             {
-                logger.LogInformation("Found {Count} pending migrations: {Migrations}", 
-                    pendingMigrationsList.Count, 
-                    string.Join(", ", pendingMigrationsList));
+                if (logger.IsEnabled(LogLevel.Information))
+                {
+                    logger.LogInformation("Found {Count} pending migrations: {Migrations}", 
+                        pendingMigrationsList.Count, 
+                        string.Join(", ", pendingMigrationsList));
+                }
                 
                 // 自动应用待处理的迁移
                 await dbContext.Database.MigrateAsync();
