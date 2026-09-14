@@ -44,6 +44,8 @@ public class AuthDbContext : DbContext
                 .WithOne(u => u.Player)
                 .HasForeignKey<Player>(e => e.Uid)
                 .OnDelete(DeleteBehavior.Cascade);
+            // 匹配 User 的查询过滤器，确保 Player 也不包含已删除用户的记录
+            entity.HasQueryFilter(e => EF.Property<User>(e, "User") == null || !EF.Property<User>(e, "User").IsDeleted);
         });
         
         modelBuilder.Entity<PlayerBan>(entity =>
