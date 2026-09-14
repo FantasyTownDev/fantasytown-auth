@@ -67,13 +67,13 @@ test(integration): add concurrent registration test
 
 ### ⚠️ 颗粒度要求（强制）
 
-**优先级：行级 > 文件级 > 功能块级**
+**提交频率优先级：行级 > 文件级 > 功能块级**
 
-| 粒度 | 适用场景 | 示例 |
+| 粒度 | 提交时机 | 示例 |
 |---|---|---|
-| **行级** | 修改单个函数/属性/字段 | `fix(auth): change max retry from 3 to 5` |
-| **文件级** | 新增/重命名单个文件 | `feat(db): add AuthLog entity` |
-| **功能块级** | 紧密相关的多文件变更 | `feat(auth): register endpoint` |
+| **行级** | 改完单个函数/属性/字段立即提交 | 修改 max retry 值 → 立即 commit |
+| **文件级** | 改完单个文件立即提交 | 新增 AuthLog.cs → 立即 commit |
+| **功能块级** | 紧密相关的多文件变更完成后提交 | register endpoint 涉及 Controller+DTO+Service → 一起 commit |
 
 | 规则 | 说明 |
 |---|---|
