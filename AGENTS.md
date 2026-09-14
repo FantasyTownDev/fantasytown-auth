@@ -65,11 +65,28 @@ docs: update AGENTS.md with commit conventions
 test(integration): add concurrent registration test
 ```
 
-### 颗粒度要求
+### ⚠️ 颗粒度要求（强制）
 
-- 精确到功能块（单个功能/修复/重构）
-- 一个提交只做一件事
-- 避免混合多个不相关的变更
+| 规则 | 说明 |
+|---|---|
+| **一个提交只做一件事** | 单个功能、单个修复、单个重构，禁止混合 |
+| **精确到功能块** | 如：`feat(auth): register endpoint` 而非 `feat: accounts module` |
+| **禁止大杂烩提交** | 不得包含多个不相关的变更（如同时改 DB + 加 API） |
+| **提交前自检** | `git diff --cached` 确认只含单一变更，否则拆分 |
+| **拆分方法** | `git add -p` 交互式暂存，或多次小提交 |
+
+**反例**：
+```
+❌ feat: implement accounts module (包含注册+登录+找回+重置)
+❌ fix: multiple bugs (修了3个不相关的问题)
+```
+
+**正例**：
+```
+✅ feat(auth): add register endpoint with validation
+✅ feat(auth): add login endpoint
+✅ fix(auth): resolve race condition in register
+```
 
 ## Git 分支规范
 
