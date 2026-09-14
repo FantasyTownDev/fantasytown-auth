@@ -57,6 +57,8 @@ public class AuthDbContext : DbContext
                 .WithMany(p => p.PlayerBans)
                 .HasForeignKey(e => e.Pid)
                 .OnDelete(DeleteBehavior.Cascade);
+            // 匹配 Player 的查询过滤器
+            entity.HasQueryFilter(e => EF.Property<Player>(e, "Player") == null || EF.Property<User>(EF.Property<Player>(e, "Player"), "User") == null || !EF.Property<User>(EF.Property<Player>(e, "Player"), "User").IsDeleted);
         });
         
         modelBuilder.Entity<AuthLog>(entity =>
