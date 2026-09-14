@@ -1,3 +1,4 @@
+using FantasyTown.Auth.Middleware;
 using FantasyTown.Auth.Modules.Accounts.Application.Queries;
 using FantasyTown.Auth.Modules.Accounts.Infrastructure;
 using FantasyTown.Auth.Persistence;
@@ -33,8 +34,12 @@ public class LoginModel : PageModel
         public string Password { get; set; } = string.Empty;
     }
 
-    public void OnGet()
+    public void OnGet(string? banned = null)
     {
+        if (banned == "true")
+        {
+            ErrorMessage = "您的账户已被封禁，请联系管理员";
+        }
     }
 
     public async Task<IActionResult> OnPostAsync()
@@ -62,7 +67,13 @@ public class LoginModel : PageModel
             return Page();
         }
 
-        // TODO: 设置认证 Cookie
+        // 设置认证 Cookie
+        await CookieAuthService.SignInAsync(
+            HttpContext,
+            result.UserId!.Value,
+            result.Username!,
+            result.Permission!.Value);
+
         return RedirectToPage("/Index");
     }
 }

@@ -1,3 +1,4 @@
+using FantasyTown.Auth.Middleware;
 using FantasyTown.Auth.Modules.Accounts.Application.Commands;
 using FantasyTown.Auth.Modules.Accounts.Infrastructure;
 using FantasyTown.Auth.Persistence;
@@ -67,7 +68,13 @@ public class RegisterModel : PageModel
             return Page();
         }
 
-        SuccessMessage = "注册成功！正在跳转到登录页面...";
-        return RedirectToPage("/Account/Login");
+        // 注册成功后自动登录
+        await CookieAuthService.SignInAsync(
+            HttpContext,
+            result.UserId!.Value,
+            result.Username!,
+            Modules.Accounts.Domain.UserPermission.NormalPlayer);
+
+        return RedirectToPage("/Index");
     }
 }

@@ -1,4 +1,7 @@
+using FantasyTown.Auth.Middleware;
+using FantasyTown.Auth.Modules.Accounts.Infrastructure;
 using FantasyTown.Auth.Persistence;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
 using StackExchange.Redis;
 using OpenTelemetry.Resources;
@@ -30,7 +33,26 @@ builder.Services.AddOpenTelemetry()
             .AddSource("FantasyTown.Auth");
     });
 
-// 3. Razor Pages
+// 3. 认证服务
+builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options =>
+    {
+        options.Cookie.Name = "__Host-ft_auth";
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+        options.Cookie.SameSite = SameSiteMode.Lax;
+        options.ExpireTimeSpan = TimeSpan.FromHours(24);
+        options.SlidingExpiration = true;
+        options.LoginPath = "/Account/Login";
+        options.LogoutPath = "/Account/Logout";
+        options.AccessDeniedPath = "/Account/AccessDenied";
+    });
+
+// 4. 服务注册
+builder.Services.AddScoped<IPasswordService, Argon2PasswordService>();
+builder.Services.AddScoped<IPermissionSnapshot, RedisPermissionSnapshot>();
+
+// 5. Razor Pages
 builder.Services.AddRazorPages();
 
 var app = builder.Build();
@@ -104,7 +126,13 @@ if (!app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseRouting();
+
+// 认证和授权中间件（必须在路由之后）
+app.UseAuthentication();
 app.UseAuthorization();
+
+// 封禁用户拦截中间件
+app.UseMiddleware<RejectBannedUserMiddleware>();
 
 app.MapRazorPages();
 app.MapHealthChecks("/health");
