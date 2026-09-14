@@ -7,6 +7,7 @@ namespace FantasyTown.Auth.Modules.Accounts.Application.Commands;
 
 /// <summary>
 /// 注册命令处理器
+/// 使用直接 INSERT + 捕获 DbUpdateException 方式处理并发
 /// </summary>
 public sealed class RegisterUserHandler
 {
@@ -42,34 +43,23 @@ public sealed class RegisterUserHandler
             return RegisterUserResult.Failure("邮箱格式无效");
         }
 
-        // 4. 检查用户名唯一性（通过 Player.Name）
-        if (await _db.Players.AnyAsync(p => p.Name == command.Username, cancellationToken))
-        {
-            return RegisterUserResult.Failure("用户名已被占用");
-        }
-
-        // 5. 检查邮箱唯一性（如果提供）
-        if (!string.IsNullOrEmpty(command.Email))
-        {
-            if (await _db.Users.AnyAsync(u => u.Email == command.Email, cancellationToken))
-            {
-                return RegisterUserResult.Failure("邮箱已被注册");
-            }
-        }
-
-        // 6. 哈希密码
+        // 4. 哈希密码
         var passwordHash = _passwordService.HashPassword(command.Password);
 
-        // 7. 生成玩家 UUID
+        // 5. 生成玩家 UUID
         var playerUuid = Guid.NewGuid().ToString("N").ToUpperInvariant();
 
-        // 8. 创建用户
+        // 6. 检查是否为种子邮箱（首次注册时提权为服主）
+        var isFirstUser = !await _db.Users.AnyAsync(cancellationToken);
+        var isSeedEmail = IsSeedEmail(command.Email);
+
+        // 7. 创建用户
         var user = new User
         {
             Email = command.Email ?? string.Empty,
             Password = passwordHash,
             Ip = command.ClientIp,
-            Permission = UserPermission.NormalPlayer,
+            Permission = (isFirstUser && isSeedEmail) ? UserPermission.ServerOwner : UserPermission.NormalPlayer,
             IsBanned = false,
             SecurityStamp = Guid.NewGuid().ToString(),
             Verified = false,
@@ -79,13 +69,10 @@ public sealed class RegisterUserHandler
 
         _db.Users.Add(user);
 
-        // 9. 保存到数据库（获取用户 ID）
-        await _db.SaveChangesAsync(cancellationToken);
-
-        // 10. 创建玩家记录
+        // 8. 创建玩家记录
         var player = new Player
         {
-            Uid = user.Uid,
+            Uid = 0, // SaveChanges 后更新
             Name = command.Username,
             Uuid = playerUuid,
             IsBanned = false,
@@ -93,12 +80,68 @@ public sealed class RegisterUserHandler
         };
 
         _db.Players.Add(player);
-        await _db.SaveChangesAsync(cancellationToken);
 
-        // 11. 增加注册 IP 的注册次数（Redis）
-        // TODO: 实现 Redis INCR REG_IP:{clientIp}
+        try
+        {
+            // 8. 直接保存（捕获唯一性约束冲突）
+            await _db.SaveChangesAsync(cancellationToken);
 
-        return RegisterUserResult.Success(user.Uid, command.Username, Guid.Parse(playerUuid));
+            // 9. 更新玩家的外键
+            player.Uid = user.Uid;
+            await _db.SaveChangesAsync(cancellationToken);
+
+            // 10. 增加注册 IP 的注册次数（Redis）
+            // TODO: 实现 Redis INCR REG_IP:{clientIp}
+
+            return RegisterUserResult.Success(user.Uid, command.Username, Guid.Parse(playerUuid));
+        }
+        catch (DbUpdateException ex)
+        {
+            // 捕获唯一性约束冲突（MySQL 1062）
+            // 检查是用户名还是邮箱冲突
+            if (IsUniqueConstraintViolation(ex))
+            {
+                // 回滚事务
+                if (_db.ChangeTracker.HasChanges())
+                {
+                    foreach (var entry in _db.ChangeTracker.Entries())
+                    {
+                        entry.State = EntityState.Detached;
+                    }
+                }
+
+                // 判断是哪个字段冲突
+                if (await _db.Players.AnyAsync(p => p.Name == command.Username, cancellationToken))
+                {
+                    return RegisterUserResult.Failure("用户名已被占用");
+                }
+
+                if (!string.IsNullOrEmpty(command.Email) && await _db.Users.AnyAsync(u => u.Email == command.Email, cancellationToken))
+                {
+                    return RegisterUserResult.Failure("邮箱已被注册");
+                }
+
+                return RegisterUserResult.Failure("注册失败，请稍后重试");
+            }
+
+            throw;
+        }
+    }
+
+    private static bool IsUniqueConstraintViolation(DbUpdateException ex)
+    {
+        // MySQL 1062 = Duplicate entry for unique key
+        // MariaDB 使用相同的错误码
+        var innerException = ex.InnerException;
+        if (innerException != null)
+        {
+            var message = innerException.Message;
+            if (message.Contains("Duplicate entry") || message.Contains("1062"))
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static bool IsValidUsername(string username)
@@ -122,5 +165,15 @@ public sealed class RegisterUserHandler
         if (string.IsNullOrWhiteSpace(email)) return false;
         var atIndex = email.IndexOf('@');
         return atIndex > 0 && atIndex < email.Length - 1 && email.Contains('.');
+    }
+
+    /// <summary>
+    /// 检查是否为种子邮箱
+    /// </summary>
+    private static bool IsSeedEmail(string? email)
+    {
+        // TODO: 从配置读取种子邮箱列表
+        // 目前默认 owner@fantasytown.com 为种子邮箱
+        return email?.Equals("owner@fantasytown.com", StringComparison.OrdinalIgnoreCase) == true;
     }
 }
