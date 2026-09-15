@@ -1,20 +1,28 @@
 # FantasyTown.Auth
 
-自托管的轻量 Minecraft 离线皮肤站微内核，基于 .NET 10 构建。
+> **AI 辅助编程声明**：本项目采用 AI 辅助编程开发，涉及 Xiaomi MiMo、Kimi、GLM、DeepSeek 等大语言模型，其中代码主要由 **Xiaomi MiMo** 全权负责生成与优化。
+
+Minecraft 第三方验证登录系统最小化内核，基于 .NET 10 构建。
 
 ## 一句话定位
 
-一个自托管的轻量 Minecraft 离线皮肤站微内核：玩家在 Web 注册账户并**绑定唯一**角色名；用该账户经 **Yggdrasil 协议**在离线服务器外置登录，离线模式下获得唯一且稳定的 Mojang 风格 UUID，皮肤由服务端统一签名分发、全服可见。
+一个最小化的 Minecraft 第三方验证登录系统内核：基于 Yggdrasil 协议实现非 Mojang 官方验证，采用垂直切片模块化单体架构。
 
 ## 功能特性
 
-- **Web 账户注册**：邮箱注册 + 唯一 Minecraft 玩家绑定
-- **Yggdrasil 外置登录**：完整协议支持（authenticate/validate/refresh/invalidate/signout/join/hasJoined/profile）
+- **Yggdrasil 第三方验证**：完整协议支持（authenticate/validate/refresh/invalidate/signout/join/hasJoined/profile）
+- **皮肤服务**：材质上传、RSA 签名、预计算缓存、全服可见（与 Minecraft 官方方案一致）
+- **Web 账户系统**：邮箱注册 + 唯一 Minecraft 角色名绑定
 - **四级权限体系**：普通玩家(0) → 协管(1) → 服主(2) → 平台管理员(3)
 - **两级封禁**：账户级（影响登录）+ 玩家级（禁单个角色名）
-- **管理域**：Razor Pages `/admin` 管理后台（玩家/协管/用户管理）
+- **管理域**：Razor Pages `/admin` 管理后台
 - **高并发设计**：热路径零 DB 访问，单实例稳态 5000 RPS
-- **安全设计**：修复 V1 评审 43 项发现，免用户枚举、令牌原子、票据一次性
+- **安全设计**：免用户枚举、令牌原子、票据一次性
+- **可扩展架构**：模块化设计，便于后续功能扩展
+
+## 后续规划
+
+- 绑定正版账号，兼容正版/非正版统一验证
 
 ## 技术栈
 
@@ -140,10 +148,6 @@ dotnet test
 - 分层限流（IP 固定窗 + 账户×IP 滑动窗 + 指数退避锁定）
 - 敏感操作二次确认（actor 当前密码验证）
 - Web 会话封禁即时性（PERM 快照 + RejectBannedUser 中间件）
-
-## 文档
-
-详细设计文档见项目根目录 `.documents/` 文件夹。
 
 ## 许可证
 
