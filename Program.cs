@@ -55,7 +55,8 @@ builder.Services.AddScoped<IPermissionSnapshot, RedisPermissionSnapshot>();
 builder.Services.AddScoped<ILockoutService, RedisLockoutService>();
 
 // 5. Yggdrasil 服务
-builder.Services.Configure<YggOptions>(builder.Configuration.GetSection("Yggdrasil"));
+var yggOptions = builder.Configuration.GetSection("Yggdrasil").Get<YggOptions>() ?? new YggOptions();
+builder.Services.AddSingleton(yggOptions);
 builder.Services.AddScoped<AuthenticateHandler>();
 builder.Services.AddScoped<ValidateHandler>();
 builder.Services.AddScoped<RefreshHandler>();
@@ -64,8 +65,7 @@ builder.Services.AddScoped<SignoutHandler>();
 builder.Services.AddScoped<ITokenService>(sp =>
 {
     var redis = sp.GetRequiredService<IConnectionMultiplexer>();
-    var options = builder.Configuration.GetSection("Yggdrasil").Get<YggOptions>() ?? new YggOptions();
-    return new RedisTokenService(redis, options.TokenExpire2);
+    return new RedisTokenService(redis, yggOptions.TokenExpire2);
 });
 
 // 6. Razor Pages
