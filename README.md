@@ -149,10 +149,6 @@ dotnet test
 - 敏感操作二次确认（actor 当前密码验证）
 - Web 会话封禁即时性（PERM 快照 + RejectBannedUser 中间件）
 
-## 文档
-
-详细设计文档见项目根目录 `.documents/` 文件夹。
-
 ## 许可证
 
 MIT License
