@@ -28,19 +28,24 @@ public sealed class RejectBannedUserMiddleware
                 // 获取权限快照
                 var snapshot = await permissionSnapshot.GetAsync(uid);
                 
-                if (snapshot != null)
+                // 哨兵语义：null（回源空/缓存失效）= 封禁等效，立即拒绝
+                if (snapshot == null)
                 {
-                    // 检查是否被封禁
-                    var nowUtc = DateTime.UtcNow;
-                    var isBanned = BanRules.IsBanEffective(snapshot.IsBanned, snapshot.BannedUntil, nowUtc);
-                    
-                    if (isBanned)
-                    {
-                        // 封禁用户，清除 Cookie 并重定向到登录页面
-                        context.Response.Cookies.Delete("__Host-ft_auth");
-                        context.Response.Redirect("/Account/Login?banned=true");
-                        return;
-                    }
+                    context.Response.Cookies.Delete("__Host-ft_auth");
+                    context.Response.Redirect("/Account/Login");
+                    return;
+                }
+
+                // 检查是否被封禁
+                var nowUtc = DateTime.UtcNow;
+                var isBanned = BanRules.IsBanEffective(snapshot.IsBanned, snapshot.BannedUntil, nowUtc);
+                
+                if (isBanned)
+                {
+                    // 封禁用户，清除 Cookie 并重定向到登录页面
+                    context.Response.Cookies.Delete("__Host-ft_auth");
+                    context.Response.Redirect("/Account/Login?banned=true");
+                    return;
                 }
             }
         }
