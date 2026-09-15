@@ -1,5 +1,6 @@
 using FantasyTown.Auth.Middleware;
 using FantasyTown.Auth.Modules.Accounts.Infrastructure;
+using FantasyTown.Auth.Modules.Yggdrasil.Authserver;
 using FantasyTown.Auth.Persistence;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
@@ -53,7 +54,17 @@ builder.Services.AddScoped<IPasswordService, Argon2PasswordService>();
 builder.Services.AddScoped<IPermissionSnapshot, RedisPermissionSnapshot>();
 builder.Services.AddScoped<ILockoutService, RedisLockoutService>();
 
-// 5. Razor Pages
+// 5. Yggdrasil 服务
+builder.Services.Configure<YggOptions>(builder.Configuration.GetSection("Yggdrasil"));
+builder.Services.AddScoped<AuthenticateHandler>();
+builder.Services.AddScoped<ITokenService>(sp =>
+{
+    var redis = sp.GetRequiredService<IConnectionMultiplexer>();
+    var options = builder.Configuration.GetSection("Yggdrasil").Get<YggOptions>() ?? new YggOptions();
+    return new RedisTokenService(redis, options.TokenExpire2);
+});
+
+// 6. Razor Pages
 builder.Services.AddRazorPages();
 
 var app = builder.Build();
@@ -137,5 +148,8 @@ app.UseMiddleware<RejectBannedUserMiddleware>();
 
 app.MapRazorPages();
 app.MapHealthChecks("/health");
+
+// Yggdrasil API 端点
+app.MapAuthenticate();
 
 app.Run();
