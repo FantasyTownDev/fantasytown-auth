@@ -69,25 +69,22 @@ public sealed class RegisterUserHandler
 
         _db.Users.Add(user);
 
-        // 8. 创建玩家记录
-        var player = new Player
-        {
-            Uid = 0, // SaveChanges 后更新
-            Name = command.Username,
-            Uuid = playerUuid,
-            IsBanned = false,
-            LastModified = DateTime.UtcNow
-        };
-
-        _db.Players.Add(player);
-
         try
         {
-            // 8. 直接保存（捕获唯一性约束冲突）
+            // 8. 先保存 User 获取生成的 Uid
             await _db.SaveChangesAsync(cancellationToken);
 
-            // 9. 更新玩家的外键
-            player.Uid = user.Uid;
+            // 9. 创建玩家记录（使用已生成的 Uid）
+            var player = new Player
+            {
+                Uid = user.Uid,
+                Name = command.Username,
+                Uuid = playerUuid,
+                IsBanned = false,
+                LastModified = DateTime.UtcNow
+            };
+
+            _db.Players.Add(player);
             await _db.SaveChangesAsync(cancellationToken);
 
             // 10. 增加注册 IP 的注册次数（Redis）
