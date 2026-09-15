@@ -17,4 +17,4 @@ namespace FantasyTown.Auth.Modules.Yggdrasil.Protocol;
 [JsonSerializable(typeof(UserPayload))]
 [JsonSerializable(typeof(UserProperty))]
 [JsonSerializable(typeof(ProfileProperty))]
-internal sealed partial class YggJsonContext : JsonSerializerContext;
+public sealed partial class YggJsonContext : JsonSerializerContext;
