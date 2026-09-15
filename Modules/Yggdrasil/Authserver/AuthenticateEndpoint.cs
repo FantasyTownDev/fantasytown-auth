@@ -47,7 +47,16 @@ public static class AuthenticateEndpoint
             // 3. 获取客户端 IP
             var clientIp = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 
-            // 4. 调用处理器
+            // 4. IP 限流检查
+            var ipLimiter = context.RequestServices.GetRequiredService<IRateLimiter>();
+            if (!await ipLimiter.IsAllowedAsync(clientIp))
+            {
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                await context.Response.WriteAsJsonAsync(YggErrorResponse.Forbidden("Rate limit exceeded."));
+                return;
+            }
+
+            // 5. 调用处理器
             var handler = context.RequestServices.GetRequiredService<AuthenticateHandler>();
             var result = await handler.HandleAsync(request, clientIp);
 

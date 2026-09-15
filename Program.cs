@@ -57,6 +57,17 @@ builder.Services.AddScoped<ILockoutService, RedisLockoutService>();
 // 5. Yggdrasil 服务
 var yggOptions = builder.Configuration.GetSection("Yggdrasil").Get<YggOptions>() ?? new YggOptions();
 builder.Services.AddSingleton(yggOptions);
+builder.Services.AddSingleton(sp =>
+{
+    var redis = sp.GetRequiredService<IConnectionMultiplexer>();
+    return new AccountRateLimiter(redis);
+});
+builder.Services.AddSingleton<AuthConcurrencyLimiter>();
+builder.Services.AddSingleton<IRateLimiter>(sp =>
+{
+    var redis = sp.GetRequiredService<IConnectionMultiplexer>();
+    return new IpRateLimiter(redis, yggOptions.AuthRateLimitPerIp);
+});
 builder.Services.AddScoped<AuthenticateHandler>();
 builder.Services.AddScoped<ValidateHandler>();
 builder.Services.AddScoped<RefreshHandler>();

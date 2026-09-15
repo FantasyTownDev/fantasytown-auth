@@ -20,6 +20,7 @@ public sealed class AuthenticateHandler
     private readonly ILockoutService _lockoutService;
     private readonly ITokenService _tokenService;
     private readonly YggOptions _options;
+    private readonly AuthConcurrencyLimiter _concurrencyLimiter;
     private const int MaxFailedAttempts = 5;
 
     public AuthenticateHandler(
@@ -28,7 +29,8 @@ public sealed class AuthenticateHandler
         IPermissionSnapshot permissionSnapshot,
         ILockoutService lockoutService,
         ITokenService tokenService,
-        YggOptions options)
+        YggOptions options,
+        AuthConcurrencyLimiter concurrencyLimiter)
     {
         _db = db;
         _passwordService = passwordService;
@@ -36,9 +38,28 @@ public sealed class AuthenticateHandler
         _lockoutService = lockoutService;
         _tokenService = tokenService;
         _options = options;
+        _concurrencyLimiter = concurrencyLimiter;
     }
 
     public async Task<AuthenticateResult> HandleAsync(AuthenticateRequest request, string clientIp, CancellationToken cancellationToken = default)
+    {
+        // 0. 并发许可检查
+        if (!_concurrencyLimiter.TryAcquire())
+        {
+            return AuthenticateResult.Forbidden("Rate limit exceeded. Too many concurrent requests.");
+        }
+
+        try
+        {
+            return await HandleCoreAsync(request, clientIp, cancellationToken);
+        }
+        finally
+        {
+            _concurrencyLimiter.Release();
+        }
+    }
+
+    private async Task<AuthenticateResult> HandleCoreAsync(AuthenticateRequest request, string clientIp, CancellationToken cancellationToken)
     {
         // 1. 查找用户（仅支持邮箱）
         var user = await _db.Users
