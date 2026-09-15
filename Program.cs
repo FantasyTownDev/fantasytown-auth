@@ -172,3 +172,6 @@ app.MapInvalidate();
 app.MapSignout();
 
 app.Run();
+
+// 使 WebApplicationFactory 可访问
+public partial class Program { }
