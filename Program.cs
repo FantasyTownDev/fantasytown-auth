@@ -57,6 +57,10 @@ builder.Services.AddScoped<ILockoutService, RedisLockoutService>();
 // 5. Yggdrasil 服务
 builder.Services.Configure<YggOptions>(builder.Configuration.GetSection("Yggdrasil"));
 builder.Services.AddScoped<AuthenticateHandler>();
+builder.Services.AddScoped<ValidateHandler>();
+builder.Services.AddScoped<RefreshHandler>();
+builder.Services.AddScoped<InvalidateHandler>();
+builder.Services.AddScoped<SignoutHandler>();
 builder.Services.AddScoped<ITokenService>(sp =>
 {
     var redis = sp.GetRequiredService<IConnectionMultiplexer>();
@@ -151,5 +155,9 @@ app.MapHealthChecks("/health");
 
 // Yggdrasil API 端点
 app.MapAuthenticate();
+app.MapValidate();
+app.MapRefresh();
+app.MapInvalidate();
+app.MapSignout();
 
 app.Run();
