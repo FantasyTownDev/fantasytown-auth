@@ -51,6 +51,7 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
 // 4. 服务注册
 builder.Services.AddScoped<IPasswordService, Argon2PasswordService>();
 builder.Services.AddScoped<IPermissionSnapshot, RedisPermissionSnapshot>();
+builder.Services.AddScoped<ILockoutService, RedisLockoutService>();
 
 // 5. Razor Pages
 builder.Services.AddRazorPages();

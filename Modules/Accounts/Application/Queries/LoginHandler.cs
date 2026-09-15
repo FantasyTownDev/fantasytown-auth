@@ -73,7 +73,7 @@ public sealed class LoginHandler
         {
             var remainingSeconds = user.BannedUntil.HasValue
                 ? BanRules.GetBanRemainingSeconds(user.BannedUntil, nowUtc) ?? 0
-                : double.MaxValue;
+                : -1; // -1 = 永久封禁
 
             return LoginResult.Banned(remainingSeconds, user.BannedReason);
         }
