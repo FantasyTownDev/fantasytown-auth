@@ -14,16 +14,18 @@ public sealed class RedisPermissionSnapshot : IPermissionSnapshot
     private readonly IConnectionMultiplexer _redis;
     private readonly AuthDbContext _db;
     private readonly TimeSpan _cacheExpiration = TimeSpan.FromMinutes(30);
+    private readonly int _database;
 
-    public RedisPermissionSnapshot(IConnectionMultiplexer redis, AuthDbContext db)
+    public RedisPermissionSnapshot(IConnectionMultiplexer redis, AuthDbContext db, int database = -1)
     {
         _redis = redis;
         _db = db;
+        _database = database;
     }
 
     public async Task<PermissionSnapshot?> GetAsync(int uid, CancellationToken cancellationToken = default)
     {
-        var db = _redis.GetDatabase();
+        var db = _redis.GetDatabase(_database);
         var key = $"PERM:PLAYER:{uid}";
         
         var cached = await db.StringGetAsync(key);
@@ -56,7 +58,7 @@ public sealed class RedisPermissionSnapshot : IPermissionSnapshot
 
     public async Task SetAsync(int uid, PermissionSnapshot snapshot, CancellationToken cancellationToken = default)
     {
-        var db = _redis.GetDatabase();
+        var db = _redis.GetDatabase(_database);
         var key = $"PERM:PLAYER:{uid}";
         
         await db.StringSetAsync(key, JsonSerializer.Serialize(snapshot), _cacheExpiration);
@@ -64,7 +66,7 @@ public sealed class RedisPermissionSnapshot : IPermissionSnapshot
 
     public async Task RemoveAsync(int uid, CancellationToken cancellationToken = default)
     {
-        var db = _redis.GetDatabase();
+        var db = _redis.GetDatabase(_database);
         var key = $"PERM:PLAYER:{uid}";
         
         await db.KeyDeleteAsync(key);

@@ -16,22 +16,25 @@ public sealed class RedisLockoutService : ILockoutService
     private readonly int _maxAttempts;
     private readonly TimeSpan _window;
     private readonly TimeSpan _lockoutDuration;
+    private readonly int _database;
 
     public RedisLockoutService(
         IConnectionMultiplexer redis,
         int maxAttempts = 5,
         int windowMinutes = 15,
-        int lockoutMinutes = 15)
+        int lockoutMinutes = 15,
+        int database = -1)
     {
         _redis = redis;
         _maxAttempts = maxAttempts;
         _window = TimeSpan.FromMinutes(windowMinutes);
         _lockoutDuration = TimeSpan.FromMinutes(lockoutMinutes);
+        _database = database;
     }
 
     public async Task<int> RecordFailureAsync(string identifier, CancellationToken cancellationToken = default)
     {
-        var db = _redis.GetDatabase();
+        var db = _redis.GetDatabase(_database);
         var key = $"LOCKOUT:{identifier}";
         var now = DateTime.UtcNow;
         var windowStart = now - _window;
@@ -52,7 +55,7 @@ public sealed class RedisLockoutService : ILockoutService
 
     public async Task<bool> IsLockedOutAsync(string identifier, CancellationToken cancellationToken = default)
     {
-        var db = _redis.GetDatabase();
+        var db = _redis.GetDatabase(_database);
         var key = $"LOCKOUT:{identifier}";
         var now = DateTime.UtcNow;
         var windowStart = now - _window;
@@ -67,7 +70,7 @@ public sealed class RedisLockoutService : ILockoutService
 
     public async Task<double?> GetRemainingLockoutSecondsAsync(string identifier, CancellationToken cancellationToken = default)
     {
-        var db = _redis.GetDatabase();
+        var db = _redis.GetDatabase(_database);
         var key = $"LOCKOUT:{identifier}";
         var now = DateTime.UtcNow;
         var windowStart = now - _window;
@@ -96,7 +99,7 @@ public sealed class RedisLockoutService : ILockoutService
 
     public async Task ResetAsync(string identifier, CancellationToken cancellationToken = default)
     {
-        var db = _redis.GetDatabase();
+        var db = _redis.GetDatabase(_database);
         var key = $"LOCKOUT:{identifier}";
         await db.KeyDeleteAsync(key);
     }
