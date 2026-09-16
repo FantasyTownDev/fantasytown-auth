@@ -189,6 +189,10 @@ app.MapHealthChecks("/health");
 var signingService = app.Services.GetRequiredService<ISigningService>();
 app.MapMetadata(signingService.GetPublicKeyBase64());
 
+// 皮肤纹理端点
+var skinBaseUrl = builder.Configuration["Yggdrasil:SkinBaseUrl"] ?? "http://localhost:5001";
+app.MapTextures(skinBaseUrl);
+
 // Yggdrasil API 端点
 app.MapAuthenticate();
 app.MapValidate();

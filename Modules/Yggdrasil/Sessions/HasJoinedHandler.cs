@@ -1,5 +1,6 @@
 using FantasyTown.Auth.Modules.Accounts.Domain;
 using FantasyTown.Auth.Modules.Accounts.Infrastructure;
+using FantasyTown.Auth.Modules.Yggdrasil.Authserver;
 using FantasyTown.Auth.Modules.Yggdrasil.Protocol;
 using FantasyTown.Auth.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -16,17 +17,20 @@ public sealed class HasJoinedHandler
     private readonly ITicketService _ticketService;
     private readonly IPlayerCache _playerCache;
     private readonly ISigningService _signingService;
+    private readonly YggOptions _yggOptions;
 
     public HasJoinedHandler(
         AuthDbContext db,
         ITicketService ticketService,
         IPlayerCache playerCache,
-        ISigningService signingService)
+        ISigningService signingService,
+        YggOptions yggOptions)
     {
         _db = db;
         _ticketService = ticketService;
         _playerCache = playerCache;
         _signingService = signingService;
+        _yggOptions = yggOptions;
     }
 
     public async Task<HasJoinedResult> HandleAsync(string username, string serverId, CancellationToken cancellationToken = default)
@@ -84,7 +88,7 @@ public sealed class HasJoinedHandler
                     .Where(b => b.Pid == p.Pid && b.IsActive)
                     .Select(b => b.BannedUntil)
                     .FirstOrDefault(),
-                TexturesUrl = null,
+                TexturesUrl = $"{_yggOptions.SkinBaseUrl}/textures/skins/{uuid}.png",
                 TexturesSignature = null
             })
             .FirstOrDefaultAsync(cancellationToken);

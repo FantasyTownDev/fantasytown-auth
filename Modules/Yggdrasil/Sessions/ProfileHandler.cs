@@ -1,3 +1,4 @@
+using FantasyTown.Auth.Modules.Yggdrasil.Authserver;
 using FantasyTown.Auth.Modules.Yggdrasil.Protocol;
 using FantasyTown.Auth.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -14,15 +15,18 @@ public sealed class ProfileHandler
     private readonly AuthDbContext _db;
     private readonly IPlayerCache _playerCache;
     private readonly ISigningService _signingService;
+    private readonly YggOptions _yggOptions;
 
     public ProfileHandler(
         AuthDbContext db,
         IPlayerCache playerCache,
-        ISigningService signingService)
+        ISigningService signingService,
+        YggOptions yggOptions)
     {
         _db = db;
         _playerCache = playerCache;
         _signingService = signingService;
+        _yggOptions = yggOptions;
     }
 
     public async Task<ProfileResult> HandleAsync(string uuid, CancellationToken cancellationToken = default)
@@ -61,7 +65,7 @@ public sealed class ProfileHandler
                     .Where(b => b.Pid == p.Pid && b.IsActive)
                     .Select(b => b.BannedUntil)
                     .FirstOrDefault(),
-                TexturesUrl = null,
+                TexturesUrl = $"{_yggOptions.SkinBaseUrl}/textures/skins/{uuid}.png",
                 TexturesSignature = null
             })
             .FirstOrDefaultAsync(cancellationToken);
