@@ -8,13 +8,13 @@ namespace FantasyTown.Auth.Modules.Yggdrasil.Sessions;
 
 /// <summary>
 /// Yggdrasil hasJoined 端点
-/// GET /sessionserver/session/minecraft/hasJoined?username={name}&serverId={id}
+/// GET /api/yggdrasil/sessionserver/session/minecraft/hasJoined?username={name}&serverId={id}
 /// </summary>
 public static class HasJoinedEndpoint
 {
     public static void MapHasJoined(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/sessionserver/session/minecraft/hasJoined", async (HttpContext context) =>
+        app.MapGet("/api/yggdrasil/sessionserver/session/minecraft/hasJoined", async (HttpContext context) =>
         {
             // 读取查询参数
             var username = context.Request.Query["username"].FirstOrDefault();

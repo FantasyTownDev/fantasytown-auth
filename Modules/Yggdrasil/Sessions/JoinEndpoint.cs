@@ -8,13 +8,13 @@ namespace FantasyTown.Auth.Modules.Yggdrasil.Sessions;
 
 /// <summary>
 /// Yggdrasil join 端点
-/// POST /sessionserver/session/minecraft/join
+/// POST /api/yggdrasil/sessionserver/session/minecraft/join
 /// </summary>
 public static class JoinEndpoint
 {
     public static void MapJoin(this IEndpointRouteBuilder app)
     {
-        app.MapPost("/sessionserver/session/minecraft/join", async (HttpContext context) =>
+        app.MapPost("/api/yggdrasil/sessionserver/session/minecraft/join", async (HttpContext context) =>
         {
             // Content-Type 检查
             if (!context.Request.ContentType?.Contains("application/json") == true)

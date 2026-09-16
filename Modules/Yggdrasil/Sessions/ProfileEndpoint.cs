@@ -8,14 +8,14 @@ namespace FantasyTown.Auth.Modules.Yggdrasil.Sessions;
 
 /// <summary>
 /// Yggdrasil profile/{uuid} 端点
-/// GET /sessionserver/session/minecraft/profile/{uuid}
+/// GET /api/yggdrasil/sessionserver/session/minecraft/profile/{uuid}
 /// 支持 CacheOutput + ETag=lastModified
 /// </summary>
 public static class ProfileEndpoint
 {
     public static void MapProfile(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/sessionserver/session/minecraft/profile/{uuid}", async (HttpContext context) =>
+        app.MapGet("/api/yggdrasil/sessionserver/session/minecraft/profile/{uuid}", async (HttpContext context) =>
         {
             var uuid = context.Request.RouteValues["uuid"]?.ToString();
             if (string.IsNullOrEmpty(uuid))
