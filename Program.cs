@@ -1,6 +1,7 @@
 using FantasyTown.Auth.Middleware;
 using FantasyTown.Auth.Modules.Accounts.Infrastructure;
 using FantasyTown.Auth.Modules.Yggdrasil.Authserver;
+using FantasyTown.Auth.Modules.Yggdrasil.Sessions;
 using FantasyTown.Auth.Persistence;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
@@ -78,6 +79,26 @@ builder.Services.AddScoped<ITokenService>(sp =>
     var redis = sp.GetRequiredService<IConnectionMultiplexer>();
     return new RedisTokenService(redis, yggOptions.TokenExpire2);
 });
+
+// 5.1 Yggdrasil Sessionserver 服务
+builder.Services.AddScoped<ITicketService>(sp =>
+{
+    var redis = sp.GetRequiredService<IConnectionMultiplexer>();
+    return new RedisTicketService(redis);
+});
+builder.Services.AddScoped<IPlayerCache>(sp =>
+{
+    var redis = sp.GetRequiredService<IConnectionMultiplexer>();
+    return new RedisPlayerCache(redis);
+});
+builder.Services.AddScoped<ISigningService>(sp =>
+{
+    var keyPath = builder.Configuration["Signing:PrivateKeyPath"] ?? "keys/signing.pem";
+    return new RsaSigningService(keyPath);
+});
+builder.Services.AddScoped<JoinHandler>();
+builder.Services.AddScoped<HasJoinedHandler>();
+builder.Services.AddScoped<ProfileHandler>();
 
 // 6. Razor Pages
 builder.Services.AddRazorPages();
@@ -170,6 +191,11 @@ app.MapValidate();
 app.MapRefresh();
 app.MapInvalidate();
 app.MapSignout();
+
+// Yggdrasil Sessionserver 端点
+app.MapJoin();
+app.MapHasJoined();
+app.MapProfile();
 
 app.Run();
 
