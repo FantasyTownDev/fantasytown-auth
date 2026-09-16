@@ -1,7 +1,6 @@
-using System.Text.Json;
+using FantasyTown.Auth.Modules.Yggdrasil.Authserver;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace FantasyTown.Auth.Modules.Yggdrasil.Sessions;
 
@@ -12,10 +11,18 @@ namespace FantasyTown.Auth.Modules.Yggdrasil.Sessions;
 /// </summary>
 public static class MetadataEndpoint
 {
-    public static void MapMetadata(this IEndpointRouteBuilder app, string publicKeyBase64)
+    public static void MapMetadata(this IEndpointRouteBuilder app, string publicKeyBase64, YggOptions yggOptions)
     {
         app.MapGet("/api/yggdrasil", async (HttpContext context) =>
         {
+            var skinDomains = new List<string>
+            {
+                "textures.minecraft.net",
+                "http://textures.minecraft.net",
+                "https://textures.minecraft.net"
+            };
+            skinDomains.AddRange(yggOptions.SkinDomains);
+
             var metadata = new
             {
                 meta = new
@@ -25,11 +32,7 @@ public static class MetadataEndpoint
                     implementationName = "FantasyTown.Auth",
                     implementationVersion = "1.0.0"
                 },
-                skinDomains = new[]
-                {
-                    "textures.minecraft.net",
-                    "http://textures.minecraft.net"
-                },
+                skinDomains = skinDomains.Distinct().ToArray(),
                 signaturePublicKeys = new[]
                 {
                     publicKeyBase64

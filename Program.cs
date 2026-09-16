@@ -187,7 +187,7 @@ app.MapHealthChecks("/health");
 
 // authlib-injector 元数据端点（必须先于其他路由）
 var signingService = app.Services.GetRequiredService<ISigningService>();
-app.MapMetadata(signingService.GetPublicKeyBase64());
+app.MapMetadata(signingService.GetPublicKeyBase64(), yggOptions);
 
 // 皮肤纹理端点
 var skinBaseUrl = builder.Configuration["Yggdrasil:SkinBaseUrl"] ?? "http://localhost:5001";

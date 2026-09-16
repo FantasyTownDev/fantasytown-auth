@@ -31,4 +31,10 @@ public sealed record YggOptions
     /// 示例：http://localhost:5001
     /// </summary>
     public string SkinBaseUrl { get; init; } = "http://localhost:5001";
+
+    /// <summary>
+    /// 皮肤域名白名单。Minecraft 客户端校验纹理 URL 是否在此列表中。
+    /// 示例：["192.168.5.230", "example.com"]
+    /// </summary>
+    public string[] SkinDomains { get; init; } = [];
 }
