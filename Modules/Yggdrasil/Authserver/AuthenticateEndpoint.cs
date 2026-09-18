@@ -16,15 +16,7 @@ public static class AuthenticateEndpoint
     {
         app.MapPost("/api/yggdrasil/authserver/authenticate", async (HttpContext context) =>
         {
-            // 1. Content-Type 检查
-            if (!context.Request.ContentType?.Contains("application/json") == true)
-            {
-                context.Response.StatusCode = StatusCodes.Status415UnsupportedMediaType;
-                await context.Response.WriteAsJsonAsync(YggErrorResponse.UnsupportedMediaType());
-                return;
-            }
-
-            // 2. 读取请求体
+            // 1. 读取请求体
             AuthenticateRequest? request;
             try
             {
@@ -32,15 +24,15 @@ public static class AuthenticateEndpoint
             }
             catch (JsonException)
             {
-                context.Response.StatusCode = StatusCodes.Status415UnsupportedMediaType;
-                await context.Response.WriteAsJsonAsync(YggErrorResponse.UnsupportedMediaType());
+                context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                await context.Response.WriteAsJsonAsync(new { error = "json", errorMessage = "Invalid request body." });
                 return;
             }
 
             if (request == null)
             {
-                context.Response.StatusCode = StatusCodes.Status415UnsupportedMediaType;
-                await context.Response.WriteAsJsonAsync(YggErrorResponse.UnsupportedMediaType());
+                context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                await context.Response.WriteAsJsonAsync(new { error = "json", errorMessage = "Invalid request body." });
                 return;
             }
 

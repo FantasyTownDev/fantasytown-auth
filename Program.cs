@@ -91,7 +91,7 @@ builder.Services.AddScoped<IPlayerCache>(sp =>
     var redis = sp.GetRequiredService<IConnectionMultiplexer>();
     return new RedisPlayerCache(redis);
 });
-builder.Services.AddScoped<ISigningService>(sp =>
+builder.Services.AddSingleton<ISigningService>(sp =>
 {
     var keyPath = builder.Configuration["Signing:PrivateKeyPath"] ?? "keys/signing.pem";
     return new RsaSigningService(keyPath);

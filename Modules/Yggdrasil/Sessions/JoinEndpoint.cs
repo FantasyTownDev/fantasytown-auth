@@ -16,15 +16,7 @@ public static class JoinEndpoint
     {
         app.MapPost("/api/yggdrasil/sessionserver/session/minecraft/join", async (HttpContext context) =>
         {
-            // Content-Type 检查
-            if (!context.Request.ContentType?.Contains("application/json") == true)
-            {
-                context.Response.StatusCode = StatusCodes.Status415UnsupportedMediaType;
-                await context.Response.WriteAsJsonAsync(YggErrorResponse.UnsupportedMediaType());
-                return;
-            }
-
-            // 读取请求体
+            // 读取请求体（authlib-injector Content-Type 可能不标准，不校验）
             JoinRequest? request;
             try
             {
@@ -32,15 +24,15 @@ public static class JoinEndpoint
             }
             catch (JsonException)
             {
-                context.Response.StatusCode = StatusCodes.Status415UnsupportedMediaType;
-                await context.Response.WriteAsJsonAsync(YggErrorResponse.UnsupportedMediaType());
+                context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                await context.Response.WriteAsJsonAsync(new { error = "json", errorMessage = "Invalid request body." });
                 return;
             }
 
             if (request == null)
             {
-                context.Response.StatusCode = StatusCodes.Status415UnsupportedMediaType;
-                await context.Response.WriteAsJsonAsync(YggErrorResponse.UnsupportedMediaType());
+                context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                await context.Response.WriteAsJsonAsync(new { error = "json", errorMessage = "Invalid request body." });
                 return;
             }
 

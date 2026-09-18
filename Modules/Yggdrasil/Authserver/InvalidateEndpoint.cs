@@ -1,5 +1,4 @@
 using System.Text.Json;
-using FantasyTown.Auth.Modules.Yggdrasil.Protocol;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
@@ -17,12 +16,6 @@ public static class InvalidateEndpoint
     {
         app.MapPost("/api/yggdrasil/authserver/invalidate", async (HttpContext context) =>
         {
-            if (!context.Request.ContentType?.Contains("application/json") == true)
-            {
-                context.Response.StatusCode = StatusCodes.Status204NoContent;
-                return;
-            }
-
             InvalidateRequest? request;
             try
             {
