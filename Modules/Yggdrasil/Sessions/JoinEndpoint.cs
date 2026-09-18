@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using FantasyTown.Auth.Modules.Yggdrasil.Protocol;
 using Microsoft.AspNetCore.Builder;
@@ -16,9 +17,13 @@ public static class JoinEndpoint
     {
         app.MapPost("/api/yggdrasil/sessionserver/session/minecraft/join", async (HttpContext context) =>
         {
-            // 读取请求体（authlib-injector Content-Type 可能不标准，不校验）
-            using var reader = new StreamReader(context.Request.Body, System.Text.Encoding.UTF8);
+            context.Request.EnableBuffering();
+
+            using var reader = new StreamReader(context.Request.Body, Encoding.UTF8, leaveOpen: true);
             var rawBody = await reader.ReadToEndAsync();
+
+            var logger = context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("JoinEndpoint");
+            logger.LogWarning("[JOIN] Raw body: {Body}", rawBody);
 
             if (string.IsNullOrWhiteSpace(rawBody))
             {
@@ -33,8 +38,9 @@ public static class JoinEndpoint
                 var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
                 request = JsonSerializer.Deserialize<JoinRequest>(rawBody, options);
             }
-            catch (JsonException)
+            catch (JsonException ex)
             {
+                logger.LogWarning(ex, "[JOIN] JSON parse failed");
                 context.Response.StatusCode = StatusCodes.Status400BadRequest;
                 await context.Response.WriteAsJsonAsync(new { error = "json", errorMessage = "Invalid request body." });
                 return;
@@ -42,10 +48,13 @@ public static class JoinEndpoint
 
             if (request == null)
             {
+                logger.LogWarning("[JOIN] Deserialized to null");
                 context.Response.StatusCode = StatusCodes.Status400BadRequest;
                 await context.Response.WriteAsJsonAsync(new { error = "json", errorMessage = "Invalid request body." });
                 return;
             }
+
+            logger.LogWarning("[JOIN] AccessToken={Token}, ServerId={ServerId}", request.AccessToken, request.ServerId);
 
             // 调用处理器
             var handler = context.RequestServices.GetRequiredService<JoinHandler>();
