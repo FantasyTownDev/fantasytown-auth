@@ -190,7 +190,7 @@ app.MapHealthChecks("/health");
 
 // authlib-injector 元数据端点（必须先于其他路由）
 var signingService = app.Services.GetRequiredService<ISigningService>();
-app.MapMetadata(signingService.GetPublicKeyBase64(), yggOptions);
+app.MapMetadata(signingService.GetPublicKeyPem(), yggOptions);
 
 // Yggdrasil API 端点
 app.MapAuthenticate();
