@@ -36,8 +36,9 @@ public sealed class ValidateHandler
             return ValidateResult.Invalid();
         }
 
-        // 3. 检查 clientToken 匹配（如果提供了）
-        if (clientToken != null && token.ClientToken != null && token.ClientToken != clientToken)
+        // 3. 检查 clientToken 匹配（如果提供了，大小写无关）
+        if (clientToken != null && token.ClientToken != null &&
+            !string.Equals(token.ClientToken, clientToken, StringComparison.OrdinalIgnoreCase))
         {
             return ValidateResult.Invalid();
         }
