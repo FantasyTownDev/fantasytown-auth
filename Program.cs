@@ -20,8 +20,25 @@ builder.Services.AddDbContextPool<AuthDbContext>(options =>
 
 var redisConfig = ConfigurationOptions.Parse(builder.Configuration["Redis:Connection"] ?? "localhost:6379");
 var redisPassword = builder.Configuration["Redis:Password"];
+
+// 支持两种配置方式：
+// 1. Redis:Connection = "password@localhost:6379"（密码嵌入连接串）
+// 2. Redis:Connection = "localhost:6379" + Redis:Password = "password"（分离配置）
+// 分离配置优先级更高
 if (!string.IsNullOrEmpty(redisPassword))
+{
     redisConfig.Password = redisPassword;
+}
+
+if (string.IsNullOrEmpty(redisConfig.Password))
+{
+    Console.WriteLine("[Redis] WARNING: No password configured! Set Redis:Password in appsettings or embed in Redis:Connection.");
+}
+else
+{
+    Console.WriteLine($"[Redis] Password loaded: length={redisConfig.Password.Length}");
+}
+
 redisConfig.AbortOnConnectFail = false;
 builder.Services.AddSingleton<IConnectionMultiplexer>(ConnectionMultiplexer.Connect(redisConfig));
 
