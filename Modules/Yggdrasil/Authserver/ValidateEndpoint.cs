@@ -40,7 +40,7 @@ public static class ValidateEndpoint
                 return;
             }
 
-            if (request == null)
+            if (request == null || request.AccessToken == null)
             {
                 context.Response.StatusCode = StatusCodes.Status400BadRequest;
                 await context.Response.WriteAsJsonAsync(new { error = "json", errorMessage = "Invalid request body." });
