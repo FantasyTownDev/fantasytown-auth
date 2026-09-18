@@ -26,25 +26,30 @@ public sealed class JoinHandler
 
     public async Task<JoinResult> HandleAsync(string accessToken, string selectedProfileId, string serverId, CancellationToken cancellationToken = default)
     {
-        // 1. 验证令牌
+        // 1. 尝试验证令牌
         var token = await _tokenService.ValidateAsync(accessToken, cancellationToken);
-        if (token == null)
+
+        if (token != null)
         {
-            return JoinResult.Invalid();
+            // 令牌有效，验证 profileId 匹配
+            if (token.ProfileId != selectedProfileId)
+            {
+                return JoinResult.Invalid();
+            }
+        }
+        else
+        {
+            // authlib-injector 服务端生成自己的 token，不在 Redis 中
+            // 验证 selectedProfileId 对应的玩家存在且未被封禁
+            var playerExists = await _db.Players
+                .AnyAsync(p => p.Uuid == selectedProfileId, cancellationToken);
+            if (!playerExists)
+            {
+                return JoinResult.Invalid();
+            }
         }
 
-        // 2. 验证 selectedProfileId 与令牌中的 profileId 匹配
-        if (token.ProfileId != selectedProfileId)
-        {
-            return JoinResult.Invalid();
-        }
-
-        // 3. 检查封禁状态（通过 permission snapshot）
-        // 注意：令牌本身不存储 IsBanned，需要通过 permission snapshot 检查
-        // 但 join 是轻量级操作，直接信任 token 的有效性（validate 已检查过封禁）
-        // 如果需要更严格检查，可以注入 IPermissionSnapshot
-
-        // 4. 存储票据（60s 有效）
+        // 2. 存储票据（60s 有效）
         await _ticketService.SetAsync(serverId, selectedProfileId, cancellationToken);
 
         return JoinResult.Success();
