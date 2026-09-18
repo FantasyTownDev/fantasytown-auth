@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using FantasyTown.Auth.Modules.Yggdrasil.Protocol;
 using Microsoft.AspNetCore.Builder;
@@ -16,11 +17,23 @@ public static class AuthenticateEndpoint
     {
         app.MapPost("/api/yggdrasil/authserver/authenticate", async (HttpContext context) =>
         {
-            // 1. 读取请求体
+            // 1. 读取原始请求体
+            using var reader = new StreamReader(context.Request.Body, Encoding.UTF8);
+            var rawBody = await reader.ReadToEndAsync();
+
+            if (string.IsNullOrWhiteSpace(rawBody))
+            {
+                context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                await context.Response.WriteAsJsonAsync(new { error = "json", errorMessage = "Invalid request body." });
+                return;
+            }
+
+            // 2. 反序列化
             AuthenticateRequest? request;
             try
             {
-                request = await context.Request.ReadFromJsonAsync<AuthenticateRequest>();
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                request = JsonSerializer.Deserialize<AuthenticateRequest>(rawBody, options);
             }
             catch (JsonException)
             {

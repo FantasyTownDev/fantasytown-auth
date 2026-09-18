@@ -16,15 +16,23 @@ public static class InvalidateEndpoint
     {
         app.MapPost("/api/yggdrasil/authserver/invalidate", async (HttpContext context) =>
         {
-            InvalidateRequest? request;
-            try
+            // 读取请求体
+            using var reader = new StreamReader(context.Request.Body, System.Text.Encoding.UTF8);
+            var rawBody = await reader.ReadToEndAsync();
+
+            InvalidateRequest? request = null;
+            if (!string.IsNullOrWhiteSpace(rawBody))
             {
-                request = await context.Request.ReadFromJsonAsync<InvalidateRequest>();
-            }
-            catch (JsonException)
-            {
-                context.Response.StatusCode = StatusCodes.Status204NoContent;
-                return;
+                try
+                {
+                    var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                    request = JsonSerializer.Deserialize<InvalidateRequest>(rawBody, options);
+                }
+                catch (JsonException)
+                {
+                    context.Response.StatusCode = StatusCodes.Status204NoContent;
+                    return;
+                }
             }
 
             if (request != null)

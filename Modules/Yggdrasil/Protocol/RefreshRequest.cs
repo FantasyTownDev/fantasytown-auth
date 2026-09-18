@@ -8,7 +8,7 @@ namespace FantasyTown.Auth.Modules.Yggdrasil.Protocol;
 public sealed record RefreshRequest
 {
     [JsonPropertyName("accessToken")]
-    public required string AccessToken { get; init; }
+    public string? AccessToken { get; init; }
 
     [JsonPropertyName("clientToken")]
     public string? ClientToken { get; init; }

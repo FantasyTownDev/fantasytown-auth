@@ -17,10 +17,22 @@ public static class SignoutEndpoint
     {
         app.MapPost("/api/yggdrasil/authserver/signout", async (HttpContext context) =>
         {
+            // 读取请求体
+            using var reader = new StreamReader(context.Request.Body, System.Text.Encoding.UTF8);
+            var rawBody = await reader.ReadToEndAsync();
+
+            if (string.IsNullOrWhiteSpace(rawBody))
+            {
+                context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                await context.Response.WriteAsJsonAsync(new { error = "json", errorMessage = "Invalid request body." });
+                return;
+            }
+
             SignoutRequest? request;
             try
             {
-                request = await context.Request.ReadFromJsonAsync<SignoutRequest>();
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                request = JsonSerializer.Deserialize<SignoutRequest>(rawBody, options);
             }
             catch (JsonException)
             {

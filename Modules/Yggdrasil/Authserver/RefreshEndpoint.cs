@@ -16,10 +16,22 @@ public static class RefreshEndpoint
     {
         app.MapPost("/api/yggdrasil/authserver/refresh", async (HttpContext context) =>
         {
+            // 读取请求体
+            using var reader = new StreamReader(context.Request.Body, System.Text.Encoding.UTF8);
+            var rawBody = await reader.ReadToEndAsync();
+
+            if (string.IsNullOrWhiteSpace(rawBody))
+            {
+                context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                await context.Response.WriteAsJsonAsync(new { error = "json", errorMessage = "Invalid request body." });
+                return;
+            }
+
             RefreshRequest? request;
             try
             {
-                request = await context.Request.ReadFromJsonAsync<RefreshRequest>();
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                request = JsonSerializer.Deserialize<RefreshRequest>(rawBody, options);
             }
             catch (JsonException)
             {
