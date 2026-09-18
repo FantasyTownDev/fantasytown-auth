@@ -19,17 +19,17 @@ public sealed class RedisTokenService : ITokenService
         _database = database;
     }
 
-    public async ValueTask<TokenRecord> IssueAsync(int uid, string email, string? clientToken, string? profileId, byte role, string? accessToken = null, CancellationToken cancellationToken = default)
+    public async ValueTask<TokenRecord> IssueAsync(int uid, string email, string? clientToken, string? profileId, byte role, CancellationToken cancellationToken = default)
     {
         var db = _redis.GetDatabase(_database);
-        var tokenValue = accessToken ?? Guid.NewGuid().ToString("N");
+        var accessToken = Guid.NewGuid().ToString("N");
         var now = DateTimeOffset.UtcNow;
 
         var token = new TokenRecord
         {
             OwnerUid = uid,
             ClientToken = clientToken,
-            AccessToken = tokenValue,
+            AccessToken = accessToken,
             ProfileId = profileId,
             CreatedAt = now,
             Role = role
@@ -43,8 +43,8 @@ public sealed class RedisTokenService : ITokenService
         {
             idKey = (RedisKey)$"ID:{email}",
             tokenPrefix = (RedisKey)"TOKEN:",
-            accessToken = (RedisValue)tokenValue,
-            tokenKey = (RedisKey)$"TOKEN:{tokenValue}",
+            accessToken = (RedisValue)accessToken,
+            tokenKey = (RedisKey)$"TOKEN:{accessToken}",
             tokenJson = (RedisValue)tokenJson,
             ttl = (RedisValue)ttlSeconds
         });

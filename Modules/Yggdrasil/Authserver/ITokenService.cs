@@ -8,7 +8,7 @@ public interface ITokenService
     /// <summary>
     /// 原子签发新令牌。如果用户已有令牌，先吊销旧令牌。
     /// </summary>
-    ValueTask<TokenRecord> IssueAsync(int uid, string email, string? clientToken, string? profileId, byte role, string? accessToken = null, CancellationToken cancellationToken = default);
+    ValueTask<TokenRecord> IssueAsync(int uid, string email, string? clientToken, string? profileId, byte role, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// 验证令牌有效性（存在 + expire_1 窗口内）。
