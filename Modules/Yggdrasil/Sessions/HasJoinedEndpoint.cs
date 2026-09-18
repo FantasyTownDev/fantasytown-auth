@@ -16,25 +16,28 @@ public static class HasJoinedEndpoint
     {
         app.MapGet("/api/yggdrasil/sessionserver/session/minecraft/hasJoined", async (HttpContext context) =>
         {
-            // 读取查询参数
             var username = context.Request.Query["username"].FirstOrDefault();
             var serverId = context.Request.Query["serverId"].FirstOrDefault();
+            var logger = context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("HasJoinedEndpoint");
+            logger.LogInformation("[HASJOINED] Request: username={Username}, serverId={ServerId}, ip={Ip}",
+                username, serverId, context.Connection.RemoteIpAddress);
 
             if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(serverId))
             {
+                logger.LogWarning("[HASJOINED] Missing params: username={Username}, serverId={ServerId}", username, serverId);
                 context.Response.StatusCode = StatusCodes.Status403Forbidden;
                 return;
             }
 
-            // 调用处理器
             var handler = context.RequestServices.GetRequiredService<HasJoinedHandler>();
             var result = await handler.HandleAsync(username, serverId);
 
             if (result.IsValid && result.Profile != null)
             {
+                logger.LogInformation("[HASJOINED] Success: uuid={Uuid}, name={Name}, props={Count}",
+                    result.Profile.Uuid, result.Profile.Name, result.Profile.Properties.Count);
                 context.Response.StatusCode = StatusCodes.Status200OK;
 
-                // 设置 ETag（基于 lastModified）
                 var lastModified = result.Profile.Properties
                     .Where(p => p.Name == "textures")
                     .Select(p =>
@@ -71,6 +74,7 @@ public static class HasJoinedEndpoint
             }
             else
             {
+                logger.LogWarning("[HASJOINED] NOT found: username={Username}, serverId={ServerId}", username, serverId);
                 context.Response.StatusCode = StatusCodes.Status204NoContent;
             }
         });

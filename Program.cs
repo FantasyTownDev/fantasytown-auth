@@ -204,6 +204,56 @@ app.MapJoin();
 app.MapHasJoined();
 app.MapProfile();
 
+// ===== 临时调试端点（部署验证后删除）=====
+app.MapGet("/debug/profile/{uuid}", async (string uuid, AuthDbContext db, ISigningService signingService, YggOptions yggOptions) =>
+{
+    var upperUuid = uuid.ToUpperInvariant();
+    var player = await db.Players.Where(p => p.Uuid == upperUuid).FirstOrDefaultAsync();
+    if (player == null) return Results.Json(new { error = "player not found", uuid });
+
+    var texturesUrl = $"{yggOptions.SkinBaseUrl}/textures/skins/{upperUuid}.png";
+    var texturePayload = new { timestamp = new DateTimeOffset(player.LastModified, System.TimeSpan.Zero).ToUnixTimeMilliseconds(), profileId = upperUuid, profileName = player.Name, textures = new { SKIN = new { url = texturesUrl } } };
+    var payloadJson = System.Text.Json.JsonSerializer.Serialize(texturePayload);
+    var payloadBytes = System.Text.Encoding.UTF8.GetBytes(payloadJson);
+    var signature = signingService.Sign(payloadJson);
+
+    var skinPath = Path.Combine("textures", "skins", $"{upperUuid.ToLowerInvariant()}.png");
+    var fileExists = File.Exists(skinPath);
+
+    return Results.Json(new
+    {
+        profile = new { id = upperUuid, name = player.Name, properties = new[] { new { name = "textures", value = Convert.ToBase64String(payloadBytes), signature } } },
+        debug = new { texturesUrl, skinPath, fileExists, payloadJson, skinDomains = yggOptions.SkinDomains }
+    });
+});
+
+app.MapGet("/debug/texture/{uuid}", async (string uuid, HttpContext context) =>
+{
+    var upperUuid = uuid.ToUpperInvariant();
+    var normalizedUuid = upperUuid.ToLowerInvariant();
+    var skinPath = Path.Combine("textures", "skins", $"{normalizedUuid}.png");
+    var exists = File.Exists(skinPath);
+    if (!exists) return Results.Json(new { error = "file not found", expectedPath = skinPath });
+
+    var skinBytes = await File.ReadAllBytesAsync(skinPath);
+    context.Response.ContentType = "image/png";
+    await context.Response.Body.WriteAsync(skinBytes);
+    return Results.Empty;
+});
+
+app.MapGet("/debug/decode/{value}", (string value) =>
+{
+    try
+    {
+        var json = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(value));
+        return Results.Content(json, "application/json");
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { error = ex.Message });
+    }
+});
+
 app.Run();
 
 // 使 WebApplicationFactory 可访问

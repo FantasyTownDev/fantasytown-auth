@@ -14,30 +14,34 @@ public static class TextureEndpoint
         app.MapGet("/textures/skins/{uuid}.png", async (HttpContext context) =>
         {
             var uuid = context.Request.RouteValues["uuid"]?.ToString();
+            var logger = context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("TextureEndpoint");
+            logger.LogInformation("[TEXTURE] Request: {Uuid} from {Ip}", uuid, context.Connection.RemoteIpAddress);
+
             if (string.IsNullOrEmpty(uuid))
             {
+                logger.LogWarning("[TEXTURE] Empty UUID");
                 context.Response.StatusCode = StatusCodes.Status404NotFound;
                 return;
             }
 
-            // 安全校验：只允许十六进制字符和短横线（大小写无关）
             if (!System.Text.RegularExpressions.Regex.IsMatch(uuid, @"^[0-9a-fA-F\-]+$"))
             {
+                logger.LogWarning("[TEXTURE] Invalid UUID format: {Uuid}", uuid);
                 context.Response.StatusCode = StatusCodes.Status400BadRequest;
                 return;
             }
 
-            // 归一化为小写（文件存储为小写）
             var normalizedUuid = uuid.ToLowerInvariant();
-
             var skinPath = Path.Combine("textures", "skins", $"{normalizedUuid}.png");
             if (!File.Exists(skinPath))
             {
+                logger.LogWarning("[TEXTURE] File NOT found: {Path}", skinPath);
                 context.Response.StatusCode = StatusCodes.Status404NotFound;
                 return;
             }
 
             var skinBytes = await File.ReadAllBytesAsync(skinPath);
+            logger.LogInformation("[TEXTURE] Serving {Uuid}, size={Size} bytes", normalizedUuid, skinBytes.Length);
             context.Response.StatusCode = StatusCodes.Status200OK;
             context.Response.ContentType = "image/png";
             context.Response.ContentLength = skinBytes.Length;
