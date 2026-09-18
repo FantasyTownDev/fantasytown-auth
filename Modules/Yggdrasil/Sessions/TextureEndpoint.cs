@@ -15,7 +15,7 @@ public static class TextureEndpoint
         {
             var uuid = context.Request.RouteValues["uuid"]?.ToString();
             var logger = context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("TextureEndpoint");
-            logger.LogInformation("[TEXTURE] Request: {Uuid} from {Ip}", uuid, context.Connection.RemoteIpAddress);
+            logger.LogDebug("[TEXTURE] Request: {Uuid} from {Ip}", uuid, context.Connection.RemoteIpAddress);
 
             if (string.IsNullOrEmpty(uuid))
             {
@@ -41,7 +41,7 @@ public static class TextureEndpoint
             }
 
             var skinBytes = await File.ReadAllBytesAsync(skinPath);
-            logger.LogInformation("[TEXTURE] Serving {Uuid}, size={Size} bytes", normalizedUuid, skinBytes.Length);
+            logger.LogDebug("[TEXTURE] Serving {Uuid}, size={Size} bytes", normalizedUuid, skinBytes.Length);
             context.Response.StatusCode = StatusCodes.Status200OK;
             context.Response.ContentType = "image/png";
             context.Response.ContentLength = skinBytes.Length;

@@ -18,7 +18,7 @@ public static class ProfileEndpoint
         {
             var uuid = context.Request.RouteValues["uuid"]?.ToString();
             var logger = context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("ProfileEndpoint");
-            logger.LogInformation("[PROFILE] Request: uuid={Uuid} from {Ip}", uuid, context.Connection.RemoteIpAddress);
+            logger.LogDebug("[PROFILE] Request: uuid={Uuid} from {Ip}", uuid, context.Connection.RemoteIpAddress);
 
             if (string.IsNullOrEmpty(uuid))
             {
@@ -33,7 +33,7 @@ public static class ProfileEndpoint
 
             if (result.IsValid && result.Profile != null)
             {
-                logger.LogInformation("[PROFILE] Found: uuid={Uuid}, name={Name}, props={Count}",
+                logger.LogDebug("[PROFILE] Found: uuid={Uuid}, name={Name}, props={Count}",
                     uuid, result.Profile.Name, result.Profile.Properties.Count);
                 context.Response.StatusCode = StatusCodes.Status200OK;
 

@@ -19,7 +19,7 @@ public static class HasJoinedEndpoint
             var username = context.Request.Query["username"].FirstOrDefault();
             var serverId = context.Request.Query["serverId"].FirstOrDefault();
             var logger = context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("HasJoinedEndpoint");
-            logger.LogInformation("[HASJOINED] Request: username={Username}, serverId={ServerId}, ip={Ip}",
+            logger.LogDebug("[HASJOINED] Request: username={Username}, serverId={ServerId}, ip={Ip}",
                 username, serverId, context.Connection.RemoteIpAddress);
 
             if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(serverId))
@@ -34,7 +34,7 @@ public static class HasJoinedEndpoint
 
             if (result.IsValid && result.Profile != null)
             {
-                logger.LogInformation("[HASJOINED] Success: uuid={Uuid}, name={Name}, props={Count}",
+                logger.LogDebug("[HASJOINED] Success: uuid={Uuid}, name={Name}, props={Count}",
                     result.Profile.Uuid, result.Profile.Name, result.Profile.Properties.Count);
                 context.Response.StatusCode = StatusCodes.Status200OK;
 
