@@ -21,7 +21,13 @@ public static class MetadataEndpoint
                 "http://textures.minecraft.net",
                 "https://textures.minecraft.net"
             };
-            skinDomains.AddRange(yggOptions.SkinDomains);
+            // 添加配置的域名 + 带协议的变体（authlib-injector 兼容）
+            foreach (var domain in yggOptions.SkinDomains)
+            {
+                skinDomains.Add(domain);
+                skinDomains.Add($"http://{domain}");
+                skinDomains.Add($"https://{domain}");
+            }
 
             var metadata = new
             {
