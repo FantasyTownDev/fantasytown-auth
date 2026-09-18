@@ -1,10 +1,6 @@
-using FantasyTown.Auth.Modules.Accounts.Domain;
-using FantasyTown.Auth.Modules.Accounts.Infrastructure;
-using FantasyTown.Auth.Modules.Shared;
 using FantasyTown.Auth.Modules.Yggdrasil.Authserver;
 using FantasyTown.Auth.Persistence;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 
 namespace FantasyTown.Auth.Modules.Yggdrasil.Sessions;
 
@@ -17,14 +13,12 @@ public sealed class JoinHandler
     private readonly AuthDbContext _db;
     private readonly ITokenService _tokenService;
     private readonly ITicketService _ticketService;
-    private readonly ILogger<JoinHandler> _logger;
 
-    public JoinHandler(AuthDbContext db, ITokenService tokenService, ITicketService ticketService, ILogger<JoinHandler> logger)
+    public JoinHandler(AuthDbContext db, ITokenService tokenService, ITicketService ticketService)
     {
         _db = db;
         _tokenService = tokenService;
         _ticketService = ticketService;
-        _logger = logger;
     }
 
     public async Task<JoinResult> HandleAsync(string accessToken, string selectedProfileId, string serverId, CancellationToken cancellationToken = default)
@@ -34,18 +28,18 @@ public sealed class JoinHandler
 
         if (token != null)
         {
-            var match = string.Equals(token.ProfileId, selectedProfileId, StringComparison.OrdinalIgnoreCase);
-            _logger.LogWarning("[JOIN] Token found in Redis, profileId={ProfileId}, match={Match}", token.ProfileId, match);
-            if (!match)
+            // 令牌有效，验证 profileId 匹配（大小写无关）
+            if (!string.Equals(token.ProfileId, selectedProfileId, StringComparison.OrdinalIgnoreCase))
             {
                 return JoinResult.Invalid();
             }
         }
         else
         {
+            // authlib-injector 服务端生成自己的 token，不在 Redis 中
+            // 验证 selectedProfileId 对应的玩家存在
             var playerExists = await _db.Players
                 .AnyAsync(p => p.Uuid == selectedProfileId, cancellationToken);
-            _logger.LogWarning("[JOIN] Token NOT in Redis, playerExists={Exists} for profileId={ProfileId}", playerExists, selectedProfileId);
             if (!playerExists)
             {
                 return JoinResult.Invalid();
