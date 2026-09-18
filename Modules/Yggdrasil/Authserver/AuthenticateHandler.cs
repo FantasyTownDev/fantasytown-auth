@@ -156,13 +156,14 @@ public sealed class AuthenticateHandler
             }
         }
 
-        // 11. 原子签发 Token
+        // 11. 原子签发 Token（使用客户端发来的 accessToken，authlib-injector 兼容）
         var token = await _tokenService.IssueAsync(
             uid: user.Uid,
             email: user.Email,
             clientToken: request.ClientToken,
             profileId: selectedProfile?.Id,
             role: (byte)user.Permission,
+            accessToken: request.AccessToken,
             cancellationToken);
 
         return AuthenticateResult.Success(new AuthenticateResponse

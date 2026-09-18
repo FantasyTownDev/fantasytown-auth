@@ -12,16 +12,16 @@ public sealed class InMemoryTokenService : ITokenService
     private readonly TimeSpan _expire1 = TimeSpan.FromDays(3);
     private readonly TimeSpan _expire2 = TimeSpan.FromDays(7);
 
-    public ValueTask<TokenRecord> IssueAsync(int uid, string email, string? clientToken, string? profileId, byte role, CancellationToken cancellationToken = default)
+    public ValueTask<TokenRecord> IssueAsync(int uid, string email, string? clientToken, string? profileId, byte role, string? accessToken = null, CancellationToken cancellationToken = default)
     {
-        var accessToken = Guid.NewGuid().ToString("N");
+        var tokenValue = accessToken ?? Guid.NewGuid().ToString("N");
         var now = DateTimeOffset.UtcNow;
 
         var token = new TokenRecord
         {
             OwnerUid = uid,
             ClientToken = clientToken,
-            AccessToken = accessToken,
+            AccessToken = tokenValue,
             ProfileId = profileId,
             CreatedAt = now,
             Role = role
@@ -33,8 +33,8 @@ public sealed class InMemoryTokenService : ITokenService
             _tokens.TryRemove(oldAccessToken, out _);
         }
 
-        _tokens[accessToken] = token;
-        _emailToAccessToken[email] = accessToken;
+        _tokens[tokenValue] = token;
+        _emailToAccessToken[email] = tokenValue;
 
         return ValueTask.FromResult(token);
     }

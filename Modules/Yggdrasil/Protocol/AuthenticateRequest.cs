@@ -19,6 +19,9 @@ public sealed record AuthenticateRequest
     [JsonPropertyName("clientToken")]
     public string? ClientToken { get; init; }
 
+    [JsonPropertyName("accessToken")]
+    public string? AccessToken { get; init; }
+
     [JsonPropertyName("requestUser")]
     public bool RequestUser { get; init; }
 }
