@@ -34,8 +34,9 @@ public sealed class JoinHandler
 
         if (token != null)
         {
-            _logger.LogWarning("[JOIN] Token found in Redis, profileId={ProfileId}, match={Match}", token.ProfileId, token.ProfileId == selectedProfileId);
-            if (token.ProfileId != selectedProfileId)
+            var match = string.Equals(token.ProfileId, selectedProfileId, StringComparison.OrdinalIgnoreCase);
+            _logger.LogWarning("[JOIN] Token found in Redis, profileId={ProfileId}, match={Match}", token.ProfileId, match);
+            if (!match)
             {
                 return JoinResult.Invalid();
             }
