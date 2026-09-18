@@ -22,10 +22,10 @@ Minecraft 第三方验证登录系统最小化内核，基于 .NET 10 构建。
 
 ## 技术栈
 
-- **框架**：.NET 10 (LTS) / ASP.NET Core 10
+- **框架**：.NET 10 / ASP.NET Core 10
 - **ORM**：EF Core 9.0 (Pomelo.EntityFrameworkCore.MySql 9.0.0)
 - **缓存**：Redis 7+（推荐）/ Memurai（Windows 开发环境可选，不推荐生产部署）
-- **数据库**：MariaDB 12.3.3
+- **数据库**：MariaDB 10.5+（Pomelo 9.0.0 测试覆盖 10.5 ~ 11.6，12.x 兼容但未经官方测试）
 - **前端**：Razor Pages + Minimal API
 - **语言**：C# 14
 
@@ -34,7 +34,7 @@ Minecraft 第三方验证登录系统最小化内核，基于 .NET 10 构建。
 ### 环境要求
 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
-- MariaDB 12.3.3
+- MariaDB 10.5+（推荐 11.x LTS，12.x 兼容但未经 Pomelo 官方测试）
 - Redis 7+（推荐）或 Memurai（Windows 开发环境可选）
 
 ### 配置
@@ -51,8 +51,8 @@ Minecraft 第三方验证登录系统最小化内核，基于 .NET 10 构建。
     "Password": ""
   },
   "Yggdrasil": {
-    "SkinBaseUrl": "http://your-server-ip:5000",
-    "SkinDomains": ["your-domain.com"]
+    "SkinBaseUrl": "http://example.com:5000",
+    "SkinDomains": ["example.com"]
   }
 }
 ```
