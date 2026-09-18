@@ -18,17 +18,16 @@ builder.Services.AddDbContextPool<AuthDbContext>(options =>
     options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString));
 });
 
-var redisConnection = builder.Configuration["Redis:Connection"] ?? "localhost:6379";
+var redisConfig = ConfigurationOptions.Parse(builder.Configuration["Redis:Connection"] ?? "localhost:6379");
 var redisPassword = builder.Configuration["Redis:Password"];
-var redisConnectionString = string.IsNullOrEmpty(redisPassword)
-    ? redisConnection
-    : $"{redisPassword}@{redisConnection}";
-// abortOnConnectFail=false: Redis 暂不可用时允许应用启动，后台重试连接
-builder.Services.AddSingleton<IConnectionMultiplexer>(ConnectionMultiplexer.Connect($"{redisConnectionString},abortOnConnectFail=false"));
+if (!string.IsNullOrEmpty(redisPassword))
+    redisConfig.Password = redisPassword;
+redisConfig.AbortOnConnectFail = false;
+builder.Services.AddSingleton<IConnectionMultiplexer>(ConnectionMultiplexer.Connect(redisConfig));
 
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<AuthDbContext>()
-    .AddRedis(redisConnectionString);
+    .AddRedis(redisConfig.ToString());
 
 // 2. OpenTelemetry
 builder.Services.AddOpenTelemetry()
