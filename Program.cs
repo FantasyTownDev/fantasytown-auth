@@ -185,13 +185,6 @@ app.Use(async (context, next) =>
         context.Request.QueryString,
         context.Connection.RemoteIpAddress);
     
-    using var reader = new StreamReader(context.Request.Body, leaveOpen: true);
-    var body = await reader.ReadToEndAsync();
-    context.Request.Body.Position = 0;
-    
-    if (!string.IsNullOrEmpty(body))
-        logger.LogDebug("[REQ BODY] {Body}", body);
-    
     await next(context);
     
     logger.LogInformation("[RES] {StatusCode}", context.Response.StatusCode);
