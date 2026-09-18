@@ -25,7 +25,7 @@ Minecraft 第三方验证登录系统最小化内核，基于 .NET 10 构建。
 - **框架**：.NET 10 / ASP.NET Core 10
 - **ORM**：EF Core 9.0 (Pomelo.EntityFrameworkCore.MySql 9.0.0)
 - **缓存**：Redis 7+（推荐）/ Memurai（Windows 开发环境可选，不推荐生产部署）
-- **数据库**：MariaDB 10.5+（Pomelo 9.0.0 测试覆盖 10.5 ~ 11.6，12.x 兼容但未经官方测试）
+- **数据库**：MariaDB 10.5+（推荐 11.x LTS，12.x 兼容但未经 Pomelo 官方测试）。也兼容 MySQL 8.0+
 - **前端**：Razor Pages + Minimal API
 - **语言**：C# 14
 
@@ -56,6 +56,8 @@ Minecraft 第三方验证登录系统最小化内核，基于 .NET 10 构建。
   }
 }
 ```
+
+> **SkinBaseUrl 格式**：`http://example.com:5000`、`http://example.com`、`https://example.com`、`https://example.com:5000` 均可。Minecraft 客户端会校验纹理 URL 域名是否在 `SkinDomains` 白名单中。
 
 ### 运行应用
 
