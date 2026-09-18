@@ -175,21 +175,6 @@ app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseRouting();
 
-// 请求日志中间件（调试用）
-app.Use(async (context, next) =>
-{
-    var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
-    logger.LogInformation("[REQ] {Method} {Path}{QueryString} from {IP}",
-        context.Request.Method,
-        context.Request.Path,
-        context.Request.QueryString,
-        context.Connection.RemoteIpAddress);
-    
-    await next(context);
-    
-    logger.LogInformation("[RES] {StatusCode}", context.Response.StatusCode);
-});
-
 // 认证和授权中间件（必须在路由之后）
 app.UseAuthentication();
 app.UseAuthorization();
