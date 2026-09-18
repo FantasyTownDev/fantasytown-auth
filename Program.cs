@@ -19,16 +19,14 @@ builder.Services.AddDbContextPool<AuthDbContext>(options =>
 });
 
 // Redis 连接配置
-// 将密码嵌入连接串传给 Parse()，确保 AUTH 命令正确发送
 var redisHost = builder.Configuration["Redis:Connection"] ?? "localhost:6379";
 var redisPassword = builder.Configuration["Redis:Password"];
 
 string redisConnStr;
 if (!string.IsNullOrEmpty(redisPassword))
 {
-    // Uri.EscapeDataString 处理密码中的 @ : 等特殊字符
-    var escapedPassword = Uri.EscapeDataString(redisPassword);
-    redisConnStr = $"{escapedPassword}@{redisHost}";
+    // StackExchange.Redis 内部按第一个 @ 分割密码和主机，无需额外转义
+    redisConnStr = $"{redisPassword}@{redisHost}";
     Console.WriteLine($"[Redis] Connecting with password (length={redisPassword.Length})");
 }
 else
