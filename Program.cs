@@ -25,8 +25,8 @@ var redisPassword = builder.Configuration["Redis:Password"];
 string redisConnStr;
 if (!string.IsNullOrEmpty(redisPassword))
 {
-    // StackExchange.Redis 内部按第一个 @ 分割密码和主机，无需额外转义
-    redisConnStr = $"{redisPassword}@{redisHost}";
+    // 密码含 @ 等特殊字符时用双引号包裹，StackExchange.Redis 按末尾 @ 分割
+    redisConnStr = $"\"{redisPassword}\"@{redisHost}";
     Console.WriteLine($"[Redis] Connecting with password (length={redisPassword.Length})");
 }
 else
