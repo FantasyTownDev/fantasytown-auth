@@ -168,7 +168,6 @@ FantasyTown.Auth/
 
 - [x] authenticate / validate / refresh / invalidate / signout
 - [x] authlib-injector 协议适配（join selectedProfile 兼容、metadata 端点、签名格式）
-- [x] 皮肤签名在生产环境验证通过
 - [x] golden fixture 逐字节一致
 
 ### P3：Sessionserver ✅
@@ -186,6 +185,9 @@ FantasyTown.Auth/
 ### P5：加固压测
 
 - [ ] validate 5k RPS 稳态
+
+### 后续待定
+
 - [ ] 完善用户登录后功能（上传/更换皮肤、更改玩家名）
 - [ ] 裁剪不必要的数据库规划
 - [ ] 【可能的】外部玩家/账号状态查询和封禁请求 API
