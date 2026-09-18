@@ -152,7 +152,8 @@ public sealed class AuthenticateHandler
             // 如果有 profileId 匹配的，使用它
             if (profileId != null)
             {
-                selectedProfile = profiles.FirstOrDefault(p => p.Id == profileId);
+                selectedProfile = profiles.FirstOrDefault(p =>
+                    string.Equals(p.Id, profileId, StringComparison.OrdinalIgnoreCase));
             }
         }
 
