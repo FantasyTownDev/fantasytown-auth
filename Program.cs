@@ -18,30 +18,27 @@ builder.Services.AddDbContextPool<AuthDbContext>(options =>
     options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString));
 });
 
-// Redis 连接配置
+// Redis 连接配置 — 直接构建 ConfigurationOptions，避免字符串解析问题
 var redisHost = builder.Configuration["Redis:Connection"] ?? "localhost:6379";
 var redisPassword = builder.Configuration["Redis:Password"];
 
-string redisConnStr;
-if (!string.IsNullOrEmpty(redisPassword))
+var redisConfig = new ConfigurationOptions
 {
-    // 密码含 @ 等特殊字符时用双引号包裹，StackExchange.Redis 按末尾 @ 分割
-    redisConnStr = $"\"{redisPassword}\"@{redisHost}";
-    Console.WriteLine($"[Redis] Connecting with password (length={redisPassword.Length})");
-}
-else
-{
-    redisConnStr = redisHost;
-    Console.WriteLine("[Redis] WARNING: No password configured!");
-}
+    AbortOnConnectFail = false,
+    Password = redisPassword ?? ""
+};
+redisConfig.EndPoints.Add(redisHost);
 
-var redisConfig = ConfigurationOptions.Parse(redisConnStr);
-redisConfig.AbortOnConnectFail = false;
+if (!string.IsNullOrEmpty(redisPassword))
+    Console.WriteLine($"[Redis] Connecting with password (length={redisPassword.Length})");
+else
+    Console.WriteLine("[Redis] WARNING: No password configured!");
+
 builder.Services.AddSingleton<IConnectionMultiplexer>(ConnectionMultiplexer.Connect(redisConfig));
 
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<AuthDbContext>()
-    .AddRedis(redisConnStr);
+    .AddRedis(redisConfig.ToString());
 
 // 2. OpenTelemetry
 builder.Services.AddOpenTelemetry()
