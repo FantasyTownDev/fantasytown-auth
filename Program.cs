@@ -23,7 +23,8 @@ var redisPassword = builder.Configuration["Redis:Password"];
 var redisConnectionString = string.IsNullOrEmpty(redisPassword)
     ? redisConnection
     : $"{redisPassword}@{redisConnection}";
-builder.Services.AddSingleton<IConnectionMultiplexer>(ConnectionMultiplexer.Connect(redisConnectionString));
+// abortOnConnectFail=false: Redis 暂不可用时允许应用启动，后台重试连接
+builder.Services.AddSingleton<IConnectionMultiplexer>(ConnectionMultiplexer.Connect($"{redisConnectionString},abortOnConnectFail=false"));
 
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<AuthDbContext>()
