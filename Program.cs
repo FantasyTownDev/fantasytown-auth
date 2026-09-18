@@ -175,6 +175,9 @@ app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseRouting();
 
+// 纹理端点必须在 HTTPS 重定向之前注册，Minecraft 客户端不跟随重定向
+app.MapTextures();
+
 // 认证和授权中间件（必须在路由之后）
 app.UseAuthentication();
 app.UseAuthorization();
@@ -188,10 +191,6 @@ app.MapHealthChecks("/health");
 // authlib-injector 元数据端点（必须先于其他路由）
 var signingService = app.Services.GetRequiredService<ISigningService>();
 app.MapMetadata(signingService.GetPublicKeyBase64(), yggOptions);
-
-// 皮肤纹理端点
-var skinBaseUrl = builder.Configuration["Yggdrasil:SkinBaseUrl"] ?? "http://localhost:5001";
-app.MapTextures(skinBaseUrl);
 
 // Yggdrasil API 端点
 app.MapAuthenticate();
