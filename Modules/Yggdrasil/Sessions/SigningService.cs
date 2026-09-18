@@ -92,16 +92,8 @@ public sealed class RsaSigningService : ISigningService
 
     public string GetPublicKeyPem()
     {
-        var publicKeyBytes = _rsa.ExportRSAPublicKey();
-        var base64 = Convert.ToBase64String(publicKeyBytes);
-        // 格式化为 PEM（每行 64 字符）
-        var lines = new List<string> { "-----BEGIN PUBLIC KEY-----" };
-        for (var i = 0; i < base64.Length; i += 64)
-        {
-            lines.Add(base64.Substring(i, Math.Min(64, base64.Length - i)));
-        }
-        lines.Add("-----END PUBLIC KEY-----");
-        return string.Join("\n", lines);
+        // ExportSubjectPublicKeyInfoPem 输出标准 SPKI PEM 格式，Java X509EncodedKeySpec 兼容
+        return _rsa.ExportSubjectPublicKeyInfoPem();
     }
 }
 
