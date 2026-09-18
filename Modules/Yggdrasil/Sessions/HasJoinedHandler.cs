@@ -115,9 +115,10 @@ public sealed class HasJoinedHandler
         var payloadJson = System.Text.Json.JsonSerializer.Serialize(texturePayload);
         var valueBase64 = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(payloadJson));
 
-        // Mojang 协议签名格式：SHA1withRSA( name UTF-8 + value UTF-8 )
-        var dataToSign = "textures" + valueBase64;
-        var signature = _signingService.Sign(dataToSign);
+        // authlib-injector 签名格式：SHA1withRSA( value UTF-8 )
+        // 验证逻辑在 YggdrasilKeyTransformUnit.verifyPropertySignature()
+        // 仅签名 propertyValue.getBytes()，不含 name
+        var signature = _signingService.Sign(valueBase64);
 
         var properties = new List<SignedProperty>
         {
