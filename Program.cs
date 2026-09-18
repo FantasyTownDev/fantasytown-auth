@@ -18,33 +18,32 @@ builder.Services.AddDbContextPool<AuthDbContext>(options =>
     options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString));
 });
 
-var redisConfig = ConfigurationOptions.Parse(builder.Configuration["Redis:Connection"] ?? "localhost:6379");
+// Redis 连接配置
+// 将密码嵌入连接串传给 Parse()，确保 AUTH 命令正确发送
+var redisHost = builder.Configuration["Redis:Connection"] ?? "localhost:6379";
 var redisPassword = builder.Configuration["Redis:Password"];
 
-// 支持两种配置方式：
-// 1. Redis:Connection = "password@localhost:6379"（密码嵌入连接串）
-// 2. Redis:Connection = "localhost:6379" + Redis:Password = "password"（分离配置）
-// 分离配置优先级更高
+string redisConnStr;
 if (!string.IsNullOrEmpty(redisPassword))
 {
-    redisConfig.Password = redisPassword;
-}
-
-if (string.IsNullOrEmpty(redisConfig.Password))
-{
-    Console.WriteLine("[Redis] WARNING: No password configured! Set Redis:Password in appsettings or embed in Redis:Connection.");
+    // Uri.EscapeDataString 处理密码中的 @ : 等特殊字符
+    var escapedPassword = Uri.EscapeDataString(redisPassword);
+    redisConnStr = $"{escapedPassword}@{redisHost}";
+    Console.WriteLine($"[Redis] Connecting with password (length={redisPassword.Length})");
 }
 else
 {
-    Console.WriteLine($"[Redis] Password loaded: length={redisConfig.Password.Length}");
+    redisConnStr = redisHost;
+    Console.WriteLine("[Redis] WARNING: No password configured!");
 }
 
+var redisConfig = ConfigurationOptions.Parse(redisConnStr);
 redisConfig.AbortOnConnectFail = false;
 builder.Services.AddSingleton<IConnectionMultiplexer>(ConnectionMultiplexer.Connect(redisConfig));
 
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<AuthDbContext>()
-    .AddRedis(redisConfig.ToString());
+    .AddRedis(redisConnStr);
 
 // 2. OpenTelemetry
 builder.Services.AddOpenTelemetry()
