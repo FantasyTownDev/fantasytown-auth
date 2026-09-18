@@ -24,6 +24,9 @@ public static class ProfileEndpoint
                 return;
             }
 
+            // UUID 归一化为大写（DB 存储为大写）
+            uuid = uuid.ToUpperInvariant();
+
             // 调用处理器
             var handler = context.RequestServices.GetRequiredService<ProfileHandler>();
             var result = await handler.HandleAsync(uuid);
