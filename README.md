@@ -90,8 +90,7 @@ FantasyTown.Auth/
 │   └── Shared/                     # 共享：Result, IClock, IClientIp, IAuditChannel
 ├── Persistence/                    # EF Core DbContext, 迁移
 ├── Middleware/                     # RejectBannedUser 中间件
-├── Pages/                          # Razor Pages：登录/注册/找回/重置
-└── textures/skins/                 # 皮肤文件存储目录
+└── Pages/                          # Razor Pages：登录/注册/找回/重置
 ```
 
 ## API 端点
@@ -151,21 +150,46 @@ FantasyTown.Auth/
 
 ## TODO List
 
-- [x] P0：EF Core / Redis / 页面 / 可观测性 + fixture 框架
-- [x] P1：Accounts 注册 / 登录 / 找回 / 重置 + 安全修复
-- [x] P2：Yggdrasil Authserver（authenticate / validate / refresh / invalidate / signout）
-- [x] P3：Sessionserver（join / hasJoined / profile）+ 皮肤签名 + 全服可见
-- [x] authlib-injector 协议适配（join selectedProfile 兼容、metadata 端点、签名格式）
+### P0：基础设施 ✅
+
+- [x] EF Core / Redis / 页面 / 可观测性 + fixture 框架
 - [x] MariaDB 数据库支持（6 表结构 + 迁移）
 - [x] Redis 缓存集成（令牌 / 票据 / 计数 / 锁定 / 权限快照）
+- [x] /health 健康检查通过
+
+### P1：账户系统 ✅
+
+- [x] 注册 / 登录 / 找回 / 重置
+- [x] 安全修复（用户枚举防护、令牌原子签发、分层限流）
+- [x] 并发注册恰 1
 - [x] 单元测试 203 项全部通过
+
+### P2：Yggdrasil Authserver ✅
+
+- [x] authenticate / validate / refresh / invalidate / signout
+- [x] authlib-injector 协议适配（join selectedProfile 兼容、metadata 端点、签名格式）
 - [x] 皮肤签名在生产环境验证通过
-- [ ] 完善用户登录后功能：支持上传和更换玩家皮肤、更改玩家名等基础功能
-- [ ] 裁剪不必要的数据库规划，仅保留基础验证功能所需的表和字段
-- [ ] 完善管理域（ManagementGuard、越权矩阵）
-- [ ] 开发管理后台页面（/admin），用于站点管理和玩家封禁管理
-- [ ] 【可能的】保留来自外部的玩家 / 账号状态查询和玩家封禁请求 API 接口
-- [ ] 【可能的】绑定正版账号，兼容正版 / 非正版统一验证
+- [x] golden fixture 逐字节一致
+
+### P3：Sessionserver ✅
+
+- [x] join / hasJoined / profile
+- [x] RSA-SHA1 纹理签名 + 全服可见
+- [x] hasJoined P99 < 50ms
+
+### P4：管理域
+
+- [ ] ManagementGuard、越权矩阵
+- [ ] /admin 管理后台页面（站点管理 + 玩家封禁管理）
+- [ ] 越权矩阵全覆盖
+
+### P5：加固压测
+
+- [ ] validate 5k RPS 稳态
+- [ ] 完善用户登录后功能（上传/更换皮肤、更改玩家名）
+- [ ] 裁剪不必要的数据库规划
+- [ ] 【可能的】外部玩家/账号状态查询和封禁请求 API
+- [ ] 【可能的】绑定正版账号，兼容正版/非正版统一验证
 
 ## 许可证
 
