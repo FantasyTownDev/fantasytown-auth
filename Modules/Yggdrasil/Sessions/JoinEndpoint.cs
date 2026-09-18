@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using FantasyTown.Auth.Modules.Yggdrasil.Protocol;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -58,7 +59,7 @@ public static class JoinEndpoint
 
             // 调用处理器
             var handler = context.RequestServices.GetRequiredService<JoinHandler>();
-            var result = await handler.HandleAsync(request.AccessToken, request.SelectedProfile.Id, request.ServerId);
+            var result = await handler.HandleAsync(request.AccessToken, request.GetProfileId(), request.ServerId);
 
             if (result.IsValid)
             {
@@ -78,24 +79,39 @@ public static class JoinEndpoint
 /// </summary>
 public sealed record JoinRequest
 {
-    [System.Text.Json.Serialization.JsonPropertyName("accessToken")]
-    public required string AccessToken { get; init; }
+    [JsonPropertyName("accessToken")]
+    public string? AccessToken { get; init; }
 
-    [System.Text.Json.Serialization.JsonPropertyName("selectedProfile")]
-    public required JoinProfile SelectedProfile { get; init; }
+    [JsonPropertyName("selectedProfile")]
+    public JsonElement SelectedProfileElement { get; init; }
 
-    [System.Text.Json.Serialization.JsonPropertyName("serverId")]
-    public required string ServerId { get; init; }
+    [JsonPropertyName("serverId")]
+    public string? ServerId { get; init; }
+
+    /// <summary>
+    /// selectedProfile 可能是字符串（authlib-injector）或对象（标准 Yggdrasil）
+    /// </summary>
+    public string GetProfileId()
+    {
+        if (SelectedProfileElement.ValueKind == JsonValueKind.String)
+            return SelectedProfileElement.GetString()!;
+        
+        if (SelectedProfileElement.ValueKind == JsonValueKind.Object &&
+            SelectedProfileElement.TryGetProperty("id", out var id))
+            return id.GetString()!;
+
+        return string.Empty;
+    }
 }
 
 /// <summary>
-/// join 中的 selectedProfile
+/// join 中的 selectedProfile（兼容标准格式）
 /// </summary>
 public sealed record JoinProfile
 {
-    [System.Text.Json.Serialization.JsonPropertyName("id")]
-    public required string Id { get; init; }
+    [JsonPropertyName("id")]
+    public string? Id { get; init; }
 
-    [System.Text.Json.Serialization.JsonPropertyName("name")]
-    public required string Name { get; init; }
+    [JsonPropertyName("name")]
+    public string? Name { get; init; }
 }
