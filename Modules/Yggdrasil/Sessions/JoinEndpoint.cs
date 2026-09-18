@@ -23,9 +23,6 @@ public static class JoinEndpoint
             using var reader = new StreamReader(context.Request.Body, Encoding.UTF8, leaveOpen: true);
             var rawBody = await reader.ReadToEndAsync();
 
-            var logger = context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("JoinEndpoint");
-            logger.LogWarning("[JOIN] Raw body: {Body}", rawBody);
-
             if (string.IsNullOrWhiteSpace(rawBody))
             {
                 context.Response.StatusCode = StatusCodes.Status400BadRequest;
@@ -39,27 +36,33 @@ public static class JoinEndpoint
                 var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
                 request = JsonSerializer.Deserialize<JoinRequest>(rawBody, options);
             }
-            catch (JsonException ex)
+            catch (JsonException)
             {
-                logger.LogWarning(ex, "[JOIN] JSON parse failed");
                 context.Response.StatusCode = StatusCodes.Status400BadRequest;
                 await context.Response.WriteAsJsonAsync(new { error = "json", errorMessage = "Invalid request body." });
                 return;
             }
 
-            if (request == null)
+            if (request?.AccessToken == null || request.ServerId == null)
             {
-                logger.LogWarning("[JOIN] Deserialized to null");
                 context.Response.StatusCode = StatusCodes.Status400BadRequest;
                 await context.Response.WriteAsJsonAsync(new { error = "json", errorMessage = "Invalid request body." });
                 return;
             }
 
-            logger.LogWarning("[JOIN] AccessToken={Token}, ServerId={ServerId}", request.AccessToken, request.ServerId);
+            var profileId = request.GetProfileId();
+            if (string.IsNullOrEmpty(profileId))
+            {
+                context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                await context.Response.WriteAsJsonAsync(new { error = "json", errorMessage = "Invalid request body." });
+                return;
+            }
 
-            // 调用处理器
+            // UUID 归一化为大写（DB 存储为大写）
+            profileId = profileId.ToUpperInvariant();
+
             var handler = context.RequestServices.GetRequiredService<JoinHandler>();
-            var result = await handler.HandleAsync(request.AccessToken, request.GetProfileId(), request.ServerId);
+            var result = await handler.HandleAsync(request.AccessToken, profileId, request.ServerId);
 
             if (result.IsValid)
             {
@@ -91,16 +94,16 @@ public sealed record JoinRequest
     /// <summary>
     /// selectedProfile 可能是字符串（authlib-injector）或对象（标准 Yggdrasil）
     /// </summary>
-    public string GetProfileId()
+    public string? GetProfileId()
     {
         if (SelectedProfileElement.ValueKind == JsonValueKind.String)
-            return SelectedProfileElement.GetString()!;
-        
+            return SelectedProfileElement.GetString();
+
         if (SelectedProfileElement.ValueKind == JsonValueKind.Object &&
             SelectedProfileElement.TryGetProperty("id", out var id))
-            return id.GetString()!;
+            return id.GetString();
 
-        return string.Empty;
+        return null;
     }
 }
 
