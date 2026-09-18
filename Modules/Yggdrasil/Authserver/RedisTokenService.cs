@@ -70,8 +70,9 @@ public sealed class RedisTokenService : ITokenService
         var oldToken = await ValidateAsync(accessToken, cancellationToken);
         if (oldToken == null) return null;
 
-        // 2. 检查 clientToken 匹配（如果提供了旧 clientToken）
-        if (clientToken != null && oldToken.ClientToken != null && oldToken.ClientToken != clientToken)
+        // 2. 检查 clientToken 匹配（大小写无关）
+        if (clientToken != null && oldToken.ClientToken != null &&
+            !string.Equals(oldToken.ClientToken, clientToken, StringComparison.OrdinalIgnoreCase))
             return null;
 
         // 3. 原子签发新令牌（Lua 会自动删除旧令牌）

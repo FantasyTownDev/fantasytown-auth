@@ -63,8 +63,9 @@ public sealed class InMemoryTokenService : ITokenService
                 return ValueTask.FromResult<TokenRecord?>(null);
             }
 
-            // 检查 clientToken 匹配
-            if (clientToken != null && oldToken.ClientToken != null && oldToken.ClientToken != clientToken)
+            // 检查 clientToken 匹配（大小写无关）
+            if (clientToken != null && oldToken.ClientToken != null &&
+                !string.Equals(oldToken.ClientToken, clientToken, StringComparison.OrdinalIgnoreCase))
             {
                 return ValueTask.FromResult<TokenRecord?>(null);
             }
