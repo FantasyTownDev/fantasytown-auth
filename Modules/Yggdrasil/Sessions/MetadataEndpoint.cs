@@ -11,7 +11,7 @@ namespace FantasyTown.Auth.Modules.Yggdrasil.Sessions;
 /// </summary>
 public static class MetadataEndpoint
 {
-    public static void MapMetadata(this IEndpointRouteBuilder app, string publicKeyBase64, YggOptions yggOptions)
+    public static void MapMetadata(this IEndpointRouteBuilder app, string publicKeyPem, YggOptions yggOptions)
     {
         app.MapGet("/api/yggdrasil", async (HttpContext context) =>
         {
@@ -39,10 +39,7 @@ public static class MetadataEndpoint
                     implementationVersion = "1.0.0"
                 },
                 skinDomains = skinDomains.Distinct().ToArray(),
-                signaturePublicKeys = new[]
-                {
-                    publicKeyBase64
-                }
+                signaturePublickey = publicKeyPem
             };
 
             context.Response.StatusCode = StatusCodes.Status200OK;
