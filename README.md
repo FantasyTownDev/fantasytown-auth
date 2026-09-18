@@ -23,9 +23,9 @@ Minecraft 第三方验证登录系统最小化内核，基于 .NET 10 构建。
 ## 技术栈
 
 - **框架**：.NET 10 (LTS) / ASP.NET Core 10
-- **ORM**：EF Core 10 (Pomelo for MySQL/MariaDB)
-- **缓存**：Memurai（Redis 兼容）/ StackExchange.Redis
-- **数据库**：MariaDB 10.x
+- **ORM**：EF Core 9.0 (Pomelo.EntityFrameworkCore.MySql 9.0.0)
+- **缓存**：Redis 7+（推荐）/ Memurai（Windows 开发环境可选，不推荐生产部署）
+- **数据库**：MariaDB 12.3.3
 - **前端**：Razor Pages + Minimal API
 - **语言**：C# 14
 
@@ -34,8 +34,8 @@ Minecraft 第三方验证登录系统最小化内核，基于 .NET 10 构建。
 ### 环境要求
 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
-- MariaDB 10.x
-- Memurai（Redis 官方合作 Windows 版本）或 Redis 7+
+- MariaDB 12.3.3
+- Redis 7+（推荐）或 Memurai（Windows 开发环境可选）
 
 ### 配置
 
@@ -149,8 +149,6 @@ FantasyTown.Auth/
 
 ## TODO List
 
-### 已完成
-
 - [x] P0：EF Core / Redis / 页面 / 可观测性 + fixture 框架
 - [x] P1：Accounts 注册 / 登录 / 找回 / 重置 + 安全修复
 - [x] P2：Yggdrasil Authserver（authenticate / validate / refresh / invalidate / signout）
@@ -159,13 +157,7 @@ FantasyTown.Auth/
 - [x] MariaDB 数据库支持（6 表结构 + 迁移）
 - [x] Redis 缓存集成（令牌 / 票据 / 计数 / 锁定 / 权限快照）
 - [x] 单元测试 203 项全部通过
-
-### 进行中
-
-- [ ] 验证皮肤签名在生产环境的兼容性
-
-### 待开发
-
+- [x] 皮肤签名在生产环境验证通过
 - [ ] 完善用户登录后功能：支持上传和更换玩家皮肤、更改玩家名等基础功能
 - [ ] 裁剪不必要的数据库规划，仅保留基础验证功能所需的表和字段
 - [ ] 完善管理域（ManagementGuard、越权矩阵）
