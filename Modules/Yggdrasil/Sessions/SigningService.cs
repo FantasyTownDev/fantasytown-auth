@@ -21,9 +21,9 @@ public interface ISigningService
     bool Verify(string payload, string signature);
 
     /// <summary>
-    /// 获取公钥（Base64 编码）
+    /// 获取公钥（PEM 格式，符合 authlib-injector 规范）
     /// </summary>
-    string GetPublicKeyBase64();
+    string GetPublicKeyPem();
 }
 
 /// <summary>
@@ -90,10 +90,18 @@ public sealed class RsaSigningService : ISigningService
         }
     }
 
-    public string GetPublicKeyBase64()
+    public string GetPublicKeyPem()
     {
         var publicKeyBytes = _rsa.ExportRSAPublicKey();
-        return Convert.ToBase64String(publicKeyBytes);
+        var base64 = Convert.ToBase64String(publicKeyBytes);
+        // 格式化为 PEM（每行 64 字符）
+        var lines = new List<string> { "-----BEGIN PUBLIC KEY-----" };
+        for (var i = 0; i < base64.Length; i += 64)
+        {
+            lines.Add(base64.Substring(i, Math.Min(64, base64.Length - i)));
+        }
+        lines.Add("-----END PUBLIC KEY-----");
+        return string.Join("\n", lines);
     }
 }
 
@@ -106,7 +114,7 @@ public sealed class InMemorySigningService : ISigningService
 
     public bool Verify(string payload, string signature) => true;
 
-    public string GetPublicKeyBase64() => "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE";
+    public string GetPublicKeyPem() => "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE\n-----END PUBLIC KEY-----";
 }
 
 /// <summary>
