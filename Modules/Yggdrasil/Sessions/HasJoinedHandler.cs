@@ -82,7 +82,7 @@ public sealed class HasJoinedHandler
             .Select(p => new PlayerSnapshot
             {
                 Name = p.Name,
-                LastModified = p.LastModified.Ticks,
+                LastModified = new DateTimeOffset(p.LastModified, TimeSpan.Zero).ToUnixTimeMilliseconds(),
                 IsBanned = p.IsBanned,
                 BannedUntil = _db.PlayerBans
                     .Where(b => b.Pid == p.Pid && b.IsActive)
