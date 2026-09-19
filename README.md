@@ -152,46 +152,82 @@ FantasyTown.Auth/
 
 ### P0：基础设施 ✅
 
-- [x] EF Core / Redis / 页面 / 可观测性 + fixture 框架
-- [x] MariaDB 数据库支持（6 表结构 + 迁移）
-- [x] Redis 缓存集成（令牌 / 票据 / 计数 / 锁定 / 权限快照）
-- [x] /health 健康检查通过
+- [x] EF Core DbContext + 初始迁移（6 表结构 + UNIQUE 约束）
+- [x] Redis 集成（令牌 / 票据 / 计数 / 锁定 / 权限快照 / DataProtection 密钥环）
+- [x] Razor Pages（登录 / 注册 / 找回 / 重置）
+- [x] OpenTelemetry 可观测性
+- [x] /health 健康检查（DB + Redis）
+- [x] Cookie 认证（`__Host-ft_auth`）
+- [x] 测试 fixture 框架（contract tests/fixtures）
 
 ### P1：账户系统 ✅
 
-- [x] 注册 / 登录 / 找回 / 重置
-- [x] 安全修复（用户枚举防护、令牌原子签发、分层限流）
-- [x] 并发注册恰 1
+- [x] 注册（RegisterUserCommand + Razor Page）
+- [x] 登录（LoginQuery + Razor Page）
+- [x] 找回密码（ForgotPassword Page）
+- [x] 重置密码（PasswordResetCommand + Razor Page）
+- [x] 用户枚举防护（统一话术 + 等耗时校验）
+- [x] 令牌原子签发（Redis Lua 脚本）
+- [x] 分层限流（IP 固定窗 + 账户×IP 滑动窗 + 并发认证限制）
+- [x] 封禁即时拦截（RejectBannedUserMiddleware + PERM 快照）
+- [x] 锁定服务（RedisLockoutService）
+- [x] 软删用户（SoftDeleteUserCommand）
+- [x] 并发注册恰 1（单元测试覆盖）
+- [x] 权限判定（PermissionRules 四级枚举 + 白名单精确匹配）
+- [x] 封禁判定（BanRules + IsBanEffective 时间谓词）
 - [x] 单元测试 203 项全部通过
 
 ### P2：Yggdrasil Authserver ✅
 
-- [x] authenticate / validate / refresh / invalidate / signout
-- [x] authlib-injector 协议适配（join selectedProfile 兼容、metadata 端点、签名格式）
-- [x] golden fixture 逐字节一致
+- [x] authenticate 端点（AuthenticateEndpoint + Handler）
+- [x] validate 端点（ValidateEndpoint + Handler）
+- [x] refresh 端点（RefreshEndpoint + Handler）
+- [x] invalidate 端点（InvalidateEndpoint + Handler）
+- [x] signout 端点（SignoutEndpoint + Handler）
+- [x] Token 服务（RedisTokenService + Lua 脚本）
+- [x] authlib-injector 兼容（metadata 端点 + selectedProfile 适配 + 签名格式）
+- [x] Yggdrasil Protocol DTO（JsonSourceGeneration）
+- [x] golden fixture 逐字节一致（ContractTests）
 
 ### P3：Sessionserver ✅
 
-- [x] join / hasJoined / profile
-- [x] RSA-SHA1 纹理签名 + 全服可见
+- [x] join 端点（JoinEndpoint + JoinHandler + TicketService）
+- [x] hasJoined 端点（HasJoinedEndpoint + HasJoinedHandler）
+- [x] profile 端点（ProfileEndpoint + ProfileHandler）
+- [x] RSA-SHA1 纹理签名（RsaSigningService + ExportSubjectPublicKeyInfoPem）
+- [x] 皮肤纹理服务（TextureEndpoint + 纹理 URL 生成）
+- [x] 玩家缓存（RedisPlayerCache）
+- [x] 全服同步可见（纹理回传验证）
 - [x] hasJoined P99 < 50ms
 
 ### P4：管理域
 
-- [ ] ManagementGuard、越权矩阵
-- [ ] /admin 管理后台页面（站点管理 + 玩家封禁管理）
-- [ ] 越权矩阵全覆盖
+- [ ] ManagementGuard 三函数（CanManage / CanClearLockout / CanExecuteAction）
+- [ ] /admin 授权策略（moderator / owner / admin）
+- [ ] /admin 区域全域 no-cache 中间件
+- [ ] 管理管线（Antiforgery → 策略 → 越权矩阵 → 二次确认 → 领域命令 → 副作用 → 审计 → PRG）
+- [ ] 敏感操作二次确认（permission-change / force-reset-password / delete 需 actor 密码）
+- [ ] 种子邮箱首个注册者自动提升为服主
+- [ ] /admin 玩家管理页（列表 / 详情 / 封禁 / 解封 / 重置纹理 / 改名）
+- [ ] /admin 用户管理页（列表 / 详情 / 封禁 / 解封 / 权限变更 / 强制重置密码 / 邮箱改绑 / 软删）
+- [ ] /admin 协管管理页（列表）
+- [ ] /admin 锁定管理页（清除锁定）
+- [ ] ManagementGuard 单测（CanManage 全组合 + CanClearLockout 自我放行锚点）
+- [ ] 管理域回归测试（越权矩阵全覆盖 + 二次确认 + 审计落库）
 
 ### P5：加固压测
 
-- [ ] validate 5k RPS 稳态
+- [ ] HSTS / 安全响应头
+- [ ] 容器非 root 部署
+- [ ] validate 5k RPS 稳态（DB QPS ≈ 0）
+- [ ] 压测报告
 
 ### 后续待定
 
-- [ ] 完善用户登录后功能（上传/更换皮肤、更改玩家名）
+- [ ] 完善用户登录后功能（上传 / 更换皮肤、更改玩家名）
 - [ ] 裁剪不必要的数据库规划
-- [ ] 【可能的】外部玩家/账号状态查询和封禁请求 API
-- [ ] 【可能的】绑定正版账号，兼容正版/非正版统一验证
+- [ ] 【可能的】外部玩家 / 账号状态查询和封禁请求 API
+- [ ] 【可能的】绑定正版账号，兼容正版 / 非正版统一验证
 
 ## 许可证
 
