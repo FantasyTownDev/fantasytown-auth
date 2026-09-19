@@ -31,9 +31,9 @@ Co-authored-by: Xiaomi MiMo <mimo@xiaomi.com>
 ### Merge Commit
 
 ```
-release: v1.0.0 - Yggdrasil authentication kernel (P0-P3)
+release: v0.1.0-alpha - Yggdrasil authentication kernel (P0-P3)
 
-First production release of FantasyTown.Auth. Minecraft third-party
+First alpha release of FantasyTown.Auth. Minecraft third-party
 authentication with full Yggdrasil protocol and authlib-injector
 compatibility.
 ```
@@ -41,6 +41,6 @@ compatibility.
 ### Extend Message
 
 ```
-BREAKING CHANGE: Initial stable release. All P0-P3 milestones complete.
+BREAKING CHANGE: Initial alpha release. All P0-P3 milestones complete.
 See README.md for deployment checklist and configuration.
 ```

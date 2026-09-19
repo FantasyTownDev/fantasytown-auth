@@ -3,14 +3,14 @@
 ## Title
 
 ```
-release: v1.0.0 - Yggdrasil authentication kernel (P0-P3)
+release: v0.1.0-alpha - Yggdrasil authentication kernel (P0-P3)
 ```
 
 ## Description
 
 ### Summary
 
-First stable release of FantasyTown.Auth covering milestones P0 through P3. This release delivers a production-ready Minecraft third-party authentication kernel with full Yggdrasil protocol support and authlib-injector compatibility.
+First alpha release of FantasyTown.Auth covering milestones P0 through P3. This release delivers a production-ready Minecraft third-party authentication kernel with full Yggdrasil protocol support and authlib-injector compatibility.
 
 ### Release Notes
 
