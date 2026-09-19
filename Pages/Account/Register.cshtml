@@ -1,0 +1,66 @@
+@page
+@model FantasyTown.Auth.Pages.Account.RegisterModel
+@{
+    ViewData["Title"] = "注册";
+}
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - FantasyTown Auth</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #1a1a2e; color: #e0e0e0; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+        .container { background: #16213e; padding: 2rem; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.3); width: 100%; max-width: 400px; }
+        h1 { text-align: center; margin-bottom: 1.5rem; color: #00d4ff; font-size: 1.8rem; }
+        .form-group { margin-bottom: 1rem; }
+        label { display: block; margin-bottom: 0.5rem; color: #a0a0a0; font-size: 0.9rem; }
+        input[type="text"], input[type="password"], input[type="email"] { width: 100%; padding: 0.75rem; border: 1px solid #2a2a4a; border-radius: 6px; background: #0f3460; color: #fff; font-size: 1rem; }
+        input:focus { outline: none; border-color: #00d4ff; }
+        button { width: 100%; padding: 0.75rem; border: none; border-radius: 6px; background: #00d4ff; color: #1a1a2e; font-size: 1rem; font-weight: bold; cursor: pointer; transition: background 0.3s; }
+        button:hover { background: #00b8d4; }
+        .error { color: #ff6b6b; text-align: center; margin-top: 1rem; font-size: 0.9rem; }
+        .success { color: #4caf50; text-align: center; margin-top: 1rem; font-size: 0.9rem; }
+        .links { text-align: center; margin-top: 1rem; }
+        .links a { color: #00d4ff; text-decoration: none; font-size: 0.9rem; }
+        .links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>注册</h1>
+        <form method="post">
+            <div class="form-group">
+                <label asp-for="Input.Username">用户名</label>
+                <input asp-for="Input.Username" placeholder="3-16个字符，字母数字下划线" />
+            </div>
+            <div class="form-group">
+                <label asp-for="Input.Password">密码</label>
+                <input asp-for="Input.Password" type="password" placeholder="至少8个字符" />
+            </div>
+            <div class="form-group">
+                <label asp-for="Input.ConfirmPassword">确认密码</label>
+                <input asp-for="Input.ConfirmPassword" type="password" placeholder="请再次输入密码" />
+            </div>
+            <div class="form-group">
+                <label asp-for="Input.Email">邮箱（可选）</label>
+                <input asp-for="Input.Email" type="email" placeholder="用于找回密码" />
+            </div>
+            <button type="submit">注册</button>
+            @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+            {
+                <div class="error">@Model.ErrorMessage</div>
+            }
+            @if (!string.IsNullOrEmpty(Model.SuccessMessage))
+            {
+                <div class="success">@Model.SuccessMessage</div>
+            }
+        </form>
+        <div class="links">
+            <a asp-page="/Account/Login">已有账户？登录</a>
+        </div>
+    </div>
+</body>
+</html>
