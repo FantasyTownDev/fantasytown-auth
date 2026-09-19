@@ -1,3 +1,5 @@
+[English](README.en.md) | 中文
+
 # FantasyTown.Auth
 
 > **AI 辅助编程声明**：本项目采用 AI 辅助编程开发，涉及 Xiaomi MiMo、Kimi、GLM、DeepSeek 等大语言模型，其中代码主要由 **Xiaomi MiMo** 全权负责生成与优化。
