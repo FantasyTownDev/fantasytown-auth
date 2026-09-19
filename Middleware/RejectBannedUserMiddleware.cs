@@ -11,6 +11,14 @@ public sealed class RejectBannedUserMiddleware
 {
     private readonly RequestDelegate _next;
 
+    private static readonly CookieOptions AuthCookieDeleteOptions = new()
+    {
+        Path = "/",
+        Secure = true,
+        HttpOnly = true,
+        SameSite = SameSiteMode.Lax
+    };
+
     public RejectBannedUserMiddleware(RequestDelegate next)
     {
         _next = next;
@@ -18,33 +26,28 @@ public sealed class RejectBannedUserMiddleware
 
     public async Task InvokeAsync(HttpContext context, IPermissionSnapshot permissionSnapshot)
     {
-        // 检查是否有用户 ID（已登录）
         if (context.User?.Identity?.IsAuthenticated == true)
         {
-            // 尝试获取用户 ID
             var uidClaim = context.User.FindFirst("uid");
             if (uidClaim != null && int.TryParse(uidClaim.Value, out var uid))
             {
-                // 获取权限快照
                 var snapshot = await permissionSnapshot.GetAsync(uid);
-                
-                // 哨兵语义：null（回源空/缓存失效）= 封禁等效，立即拒绝
+
                 if (snapshot == null)
                 {
-                    context.Response.Cookies.Delete("__Host-ft_auth");
-                    context.Response.Redirect("/Account/Login");
+                    context.Response.Cookies.Delete("__Host-ft_auth", AuthCookieDeleteOptions);
+                    context.Response.StatusCode = StatusCodes.Status302Found;
+                    context.Response.Headers.Location = "/Account/Login";
                     return;
                 }
 
-                // 检查是否被封禁
-                var nowUtc = DateTime.UtcNow;
-                var isBanned = BanRules.IsBanEffective(snapshot.IsBanned, snapshot.BannedUntil, nowUtc);
-                
+                var isBanned = BanRules.IsBanEffective(snapshot.IsBanned, snapshot.BannedUntil, DateTime.UtcNow);
+
                 if (isBanned)
                 {
-                    // 封禁用户，清除 Cookie 并重定向到登录页面
-                    context.Response.Cookies.Delete("__Host-ft_auth");
-                    context.Response.Redirect("/Account/Login?banned=true");
+                    context.Response.Cookies.Delete("__Host-ft_auth", AuthCookieDeleteOptions);
+                    context.Response.StatusCode = StatusCodes.Status302Found;
+                    context.Response.Headers.Location = "/Account/Login?banned=true";
                     return;
                 }
             }

@@ -1,5 +1,7 @@
 using FantasyTown.Auth.Middleware;
 using FantasyTown.Auth.Modules.Accounts.Infrastructure;
+using FantasyTown.Auth.Modules.Yggdrasil.Authserver;
+using FantasyTown.Auth.Modules.Yggdrasil.Sessions;
 using FantasyTown.Auth.Persistence;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
@@ -16,12 +18,27 @@ builder.Services.AddDbContextPool<AuthDbContext>(options =>
     options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString));
 });
 
-var redisConnectionString = builder.Configuration["Redis:Connection"] ?? "localhost:6379";
-builder.Services.AddSingleton<IConnectionMultiplexer>(ConnectionMultiplexer.Connect(redisConnectionString));
+// Redis 连接配置 — 直接构建 ConfigurationOptions，避免字符串解析问题
+var redisHost = builder.Configuration["Redis:Connection"] ?? "localhost:6379";
+var redisPassword = builder.Configuration["Redis:Password"];
+
+var redisConfig = new ConfigurationOptions
+{
+    AbortOnConnectFail = false,
+    Password = redisPassword ?? ""
+};
+redisConfig.EndPoints.Add(redisHost);
+
+if (!string.IsNullOrEmpty(redisPassword))
+    Console.WriteLine($"[Redis] Connecting with password (length={redisPassword.Length})");
+else
+    Console.WriteLine("[Redis] WARNING: No password configured!");
+
+builder.Services.AddSingleton<IConnectionMultiplexer>(ConnectionMultiplexer.Connect(redisConfig));
 
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<AuthDbContext>()
-    .AddRedis(redisConnectionString);
+    .AddRedis(redisConfig.ToString());
 
 // 2. OpenTelemetry
 builder.Services.AddOpenTelemetry()
@@ -53,7 +70,52 @@ builder.Services.AddScoped<IPasswordService, Argon2PasswordService>();
 builder.Services.AddScoped<IPermissionSnapshot, RedisPermissionSnapshot>();
 builder.Services.AddScoped<ILockoutService, RedisLockoutService>();
 
-// 5. Razor Pages
+// 5. Yggdrasil 服务
+var yggOptions = builder.Configuration.GetSection("Yggdrasil").Get<YggOptions>() ?? new YggOptions();
+builder.Services.AddSingleton(yggOptions);
+builder.Services.AddSingleton(sp =>
+{
+    var redis = sp.GetRequiredService<IConnectionMultiplexer>();
+    return new AccountRateLimiter(redis);
+});
+builder.Services.AddSingleton<AuthConcurrencyLimiter>();
+builder.Services.AddSingleton<IRateLimiter>(sp =>
+{
+    var redis = sp.GetRequiredService<IConnectionMultiplexer>();
+    return new IpRateLimiter(redis, yggOptions.AuthRateLimitPerIp);
+});
+builder.Services.AddScoped<AuthenticateHandler>();
+builder.Services.AddScoped<ValidateHandler>();
+builder.Services.AddScoped<RefreshHandler>();
+builder.Services.AddScoped<InvalidateHandler>();
+builder.Services.AddScoped<SignoutHandler>();
+builder.Services.AddScoped<ITokenService>(sp =>
+{
+    var redis = sp.GetRequiredService<IConnectionMultiplexer>();
+    return new RedisTokenService(redis, yggOptions.TokenExpire2);
+});
+
+// 5.1 Yggdrasil Sessionserver 服务
+builder.Services.AddScoped<ITicketService>(sp =>
+{
+    var redis = sp.GetRequiredService<IConnectionMultiplexer>();
+    return new RedisTicketService(redis);
+});
+builder.Services.AddScoped<IPlayerCache>(sp =>
+{
+    var redis = sp.GetRequiredService<IConnectionMultiplexer>();
+    return new RedisPlayerCache(redis);
+});
+builder.Services.AddSingleton<ISigningService>(sp =>
+{
+    var keyPath = builder.Configuration["Signing:PrivateKeyPath"] ?? "keys/signing.pem";
+    return new RsaSigningService(keyPath);
+});
+builder.Services.AddScoped<JoinHandler>();
+builder.Services.AddScoped<HasJoinedHandler>();
+builder.Services.AddScoped<ProfileHandler>();
+
+// 6. Razor Pages
 builder.Services.AddRazorPages();
 
 var app = builder.Build();
@@ -128,6 +190,9 @@ app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseRouting();
 
+// 纹理端点必须在 HTTPS 重定向之前注册，Minecraft 客户端不跟随重定向
+app.MapTextures();
+
 // 认证和授权中间件（必须在路由之后）
 app.UseAuthentication();
 app.UseAuthorization();
@@ -138,4 +203,23 @@ app.UseMiddleware<RejectBannedUserMiddleware>();
 app.MapRazorPages();
 app.MapHealthChecks("/health");
 
+// authlib-injector 元数据端点（必须先于其他路由）
+var signingService = app.Services.GetRequiredService<ISigningService>();
+app.MapMetadata(signingService.GetPublicKeyPem(), yggOptions);
+
+// Yggdrasil API 端点
+app.MapAuthenticate();
+app.MapValidate();
+app.MapRefresh();
+app.MapInvalidate();
+app.MapSignout();
+
+// Yggdrasil Sessionserver 端点
+app.MapJoin();
+app.MapHasJoined();
+app.MapProfile();
+
 app.Run();
+
+// 使 WebApplicationFactory 可访问
+public partial class Program { }

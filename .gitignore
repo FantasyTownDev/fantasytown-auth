@@ -312,3 +312,7 @@ docker-compose.override.yml
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Runtime data
+textures/
+keys/
