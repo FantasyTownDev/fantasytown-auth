@@ -16,12 +16,17 @@ jobs:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     strategy:
       matrix:
-        rid:
-          - win-x64
-          - win-x86
-          - win-arm64
-          - linux-x64
-          - linux-arm64
+        include:
+          - rid: win-x64
+            archive: zip
+          - rid: win-x86
+            archive: zip
+          - rid: win-arm64
+            archive: zip
+          - rid: linux-x64
+            archive: tar.gz
+          - rid: linux-arm64
+            archive: tar.gz
     steps:
       - uses: actions/checkout@v4
 
@@ -45,16 +50,20 @@ jobs:
       - name: Publish
         run: dotnet publish -c ${{ steps.config.outputs.configuration }} -r ${{ matrix.rid }} --self-contained false --no-restore -o publish/${{ matrix.rid }}/
 
-      - name: Package ZIP
+      - name: Package Archive
         run: |
           cd publish/${{ matrix.rid }}
-          zip -r ../${{ matrix.rid }}.zip .
+          if [ "${{ matrix.archive }}" = "zip" ]; then
+            zip -r ../${{ matrix.rid }}.zip .
+          else
+            tar -czf ../${{ matrix.rid }}.tar.gz .
+          fi
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.rid }}
-          path: publish/${{ matrix.rid }}.zip
+          path: publish/${{ matrix.rid }}.${{ matrix.archive }}
           retention-days: 7
 
   release:
@@ -82,6 +91,6 @@ jobs:
           name: v${{ steps.version.outputs.version }}
           draft: true
           generate_release_notes: false
-          files: artifacts/**/*.zip
+          files: artifacts/**/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
