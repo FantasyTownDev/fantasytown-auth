@@ -20,6 +20,10 @@ Minecraft 皮肤站微内核（Yggdrasil 外置登录 + Web 账户注册），�
 - **不要 push**：未经允许不得 git push
 - **不要改规划**：未经允许不得更改设计文档中的冻结项
 - **本机环境**：Windows，MariaDB（属MySQL分支，相对独立），Memurai（Redis 官方合作 Windows 版本），无 docker
+- **⚠️ 文件操作三次确认**：任何文件/目录的创建、移动、重命名、删除操作前，必须至少三次确认：
+  1. 确认操作目标路径是否正确
+  2. 确认操作是否会影响其他文件/引用
+  3. 确认操作后是否需要同步更新相关配置/文档
 
 ## Conventional Commits 规范
 
@@ -144,6 +148,10 @@ Modules/
 ├── Yggdrasil/         # Authserver + Sessions + Profiles + Protocol
 └── Shared/            # Result, IClock, IClientIp, IAuditChannel, SiteOptions
 Persistence/           # AuthDbContext, EF Migrations
+Tests/
+├── FantasyTown.Auth.UnitTests/           # PermissionRules/Guard/谓词纯函数
+├── FantasyTown.Auth.IntegrationTests/    # Testcontainers(Redis+MySQL)
+└── FantasyTown.Auth.ContractTests/       # golden fixtures（逐字节比对）
 ```
 
 **关键约束**：Accounts 通过 `IPlayerDirectory`（Shared 接口）暴露给 Yggdrasil，禁止直接访问 DbSet。
@@ -167,13 +175,13 @@ dotnet restore
 dotnet build
 
 # 运行单元测试（无需外部服务）
-dotnet test tests/FantasyTown.Auth.UnitTests
+dotnet test Tests/FantasyTown.Auth.UnitTests
 
 # 运行集成测试（需要 MariaDB + Redis 本地服务）
-dotnet test tests/FantasyTown.Auth.IntegrationTests
+dotnet test Tests/FantasyTown.Auth.IntegrationTests
 
 # 运行契约测试
-dotnet test tests/FantasyTown.Auth.ContractTests
+dotnet test Tests/FantasyTown.Auth.ContractTests
 
 # EF 迁移
 dotnet ef migrations add <MigrationName> --project src/FantasyTown.Auth
