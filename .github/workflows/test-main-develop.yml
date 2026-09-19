@@ -1,0 +1,109 @@
+name: Test (Main/Develop)
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+
+jobs:
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore
+
+      - name: Unit Tests
+        run: dotnet test Tests/FantasyTown.Auth.UnitTests --no-build --verbosity normal --logger "trx;LogFileName=unit-results.trx"
+
+      - name: Upload Unit Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results
+          path: Tests/FantasyTown.Auth.UnitTests/TestResults/*.trx
+          retention-days: 7
+
+  contract-tests:
+    name: Contract Tests
+    needs: unit-tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore
+
+      - name: Contract Tests
+        run: dotnet test Tests/FantasyTown.Auth.ContractTests --no-build --verbosity normal --logger "trx;LogFileName=contract-results.trx"
+
+      - name: Upload Contract Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contract-test-results
+          path: Tests/FantasyTown.Auth.ContractTests/TestResults/*.trx
+          retention-days: 7
+
+  integration-tests:
+    name: Integration Tests (MariaDB)
+    needs: unit-tests
+    runs-on: ubuntu-latest
+    services:
+      mariadb:
+        image: mariadb:11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: fantasytown_integration_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore
+
+      - name: Integration Tests
+        run: dotnet test Tests/FantasyTown.Auth.IntegrationTests --no-build --verbosity normal --logger "trx;LogFileName=integration-results.trx"
+        env:
+          IntegrationTests__ConnectionString: "Server=localhost;Port=3306;Database=fantasytown_integration_test;User=root;Password=root;"
+
+      - name: Upload Integration Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-results
+          path: Tests/FantasyTown.Auth.IntegrationTests/TestResults/*.trx
+          retention-days: 7

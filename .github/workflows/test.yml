@@ -3,6 +3,11 @@ name: Test
 on:
   push:
     branches:
+      - '**'
+      - '!main'
+      - '!develop'
+  pull_request:
+    branches:
       - main
       - develop
 
@@ -24,13 +29,13 @@ jobs:
       - name: Build
         run: dotnet build --no-restore
 
-      - name: Test
-        run: dotnet test Tests/FantasyTown.Auth.UnitTests --no-build --verbosity normal --logger "trx;LogFileName=results.trx"
+      - name: Unit Tests
+        run: dotnet test Tests/FantasyTown.Auth.UnitTests --no-build --verbosity normal --logger "trx;LogFileName=unit-results.trx"
 
       - name: Upload Test Results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-results
+          name: unit-test-results
           path: Tests/FantasyTown.Auth.UnitTests/TestResults/*.trx
           retention-days: 7
