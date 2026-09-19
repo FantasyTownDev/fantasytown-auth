@@ -11,7 +11,7 @@ on:
 
 jobs:
   build:
-    name: Build ${{ matrix.rid }} (${{ matrix.configuration }})
+    name: Build ${{ matrix.rid }}
     runs-on: ubuntu-latest
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     strategy:
@@ -22,8 +22,6 @@ jobs:
           - win-arm64
           - linux-x64
           - linux-arm64
-        configuration:
-          - ${{ github.ref_name == 'main' && 'Release' || 'Debug' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -32,24 +30,38 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Determine Configuration
+        id: config
+        run: |
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            echo "configuration=Release" >> $GITHUB_OUTPUT
+          else
+            echo "configuration=Debug" >> $GITHUB_OUTPUT
+          fi
+
       - name: Restore
         run: dotnet restore
 
       - name: Publish
-        run: dotnet publish -c ${{ matrix.configuration }} -r ${{ matrix.rid }} --self-contained false --no-restore -o publish/${{ matrix.rid }}/
+        run: dotnet publish -c ${{ steps.config.outputs.configuration }} -r ${{ matrix.rid }} --self-contained false --no-restore -o publish/${{ matrix.rid }}/
+
+      - name: Package ZIP
+        run: |
+          cd publish/${{ matrix.rid }}
+          zip -r ../${{ matrix.rid }}.zip .
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.ref_name }}-${{ matrix.rid }}-${{ matrix.configuration }}
-          path: publish/${{ matrix.rid }}/
+          name: ${{ matrix.rid }}
+          path: publish/${{ matrix.rid }}.zip
           retention-days: 7
 
   release:
     name: Create Draft Release
     needs: build
     runs-on: ubuntu-latest
-    if: github.ref_name == 'main'
+    if: github.ref_name == 'main' && github.event.workflow_run.conclusion == 'success'
     steps:
       - uses: actions/checkout@v4
 
@@ -57,7 +69,6 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts/
-          pattern: main-*
 
       - name: Extract Version
         id: version
@@ -68,10 +79,9 @@ jobs:
       - name: Create Draft Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.version.outputs.version }}
           name: v${{ steps.version.outputs.version }}
           draft: true
           generate_release_notes: false
-          files: artifacts/**/*
+          files: artifacts/**/*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

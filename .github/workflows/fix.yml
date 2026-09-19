@@ -45,14 +45,14 @@ jobs:
       - name: Build
         run: dotnet build --no-restore
 
-      - name: Test
-        run: dotnet test Tests/FantasyTown.Auth.UnitTests --no-build --verbosity normal --logger "trx;LogFileName=results.trx"
+      - name: Unit Tests
+        run: dotnet test Tests/FantasyTown.Auth.UnitTests --no-build --verbosity normal --logger "trx;LogFileName=unit-results.trx"
 
       - name: Upload Test Results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-results
+          name: unit-test-results
           path: Tests/FantasyTown.Auth.UnitTests/TestResults/*.trx
           retention-days: 7
 
@@ -85,16 +85,23 @@ jobs:
       - name: Publish Release
         run: dotnet publish -c Release -r ${{ matrix.rid }} --self-contained false --no-restore -o publish/${{ matrix.rid }}-release/
 
+      - name: Package ZIP
+        run: |
+          cd publish/${{ matrix.rid }}-debug
+          zip -r ../${{ matrix.rid }}-debug.zip .
+          cd ../${{ matrix.rid }}-release
+          zip -r ../${{ matrix.rid }}-release.zip .
+
       - name: Upload Debug Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: fix-${{ matrix.rid }}-debug
-          path: publish/${{ matrix.rid }}-debug/
+          name: ${{ matrix.rid }}-debug
+          path: publish/${{ matrix.rid }}-debug.zip
           retention-days: 7
 
       - name: Upload Release Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: fix-${{ matrix.rid }}-release
-          path: publish/${{ matrix.rid }}-release/
+          name: ${{ matrix.rid }}-release
+          path: publish/${{ matrix.rid }}-release.zip
           retention-days: 7
