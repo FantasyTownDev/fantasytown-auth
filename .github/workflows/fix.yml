@@ -19,15 +19,12 @@ jobs:
 
       - name: Restore
         run: dotnet restore
-        working-directory: src/FantasyTown.Auth
 
       - name: Build
         run: dotnet build --no-restore
-        working-directory: src/FantasyTown.Auth
 
       - name: Format Check
         run: dotnet format --verify-no-changes --no-restore
-        working-directory: src/FantasyTown.Auth
         continue-on-error: true
 
   test:
@@ -44,15 +41,12 @@ jobs:
 
       - name: Restore
         run: dotnet restore
-        working-directory: src/FantasyTown.Auth
 
       - name: Build
         run: dotnet build --no-restore
-        working-directory: src/FantasyTown.Auth
 
       - name: Test
-        run: dotnet test --no-build --verbosity normal --logger "trx;LogFileName=results.trx"
-        working-directory: tests/FantasyTown.Auth.UnitTests
+        run: dotnet test tests/FantasyTown.Auth.UnitTests --no-build --verbosity normal --logger "trx;LogFileName=results.trx"
 
       - name: Upload Test Results
         if: always()
@@ -62,10 +56,18 @@ jobs:
           path: tests/FantasyTown.Auth.UnitTests/TestResults/*.trx
           retention-days: 7
 
-  build-debug:
-    name: Build (Debug)
+  build:
+    name: Build ${{ matrix.rid }}
     needs: test
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rid:
+          - win-x64
+          - win-x86
+          - win-arm64
+          - linux-x64
+          - linux-arm64
     steps:
       - uses: actions/checkout@v4
 
@@ -76,42 +78,23 @@ jobs:
 
       - name: Restore
         run: dotnet restore
-        working-directory: src/FantasyTown.Auth
 
       - name: Publish Debug
-        run: dotnet publish -c Debug --no-restore -o publish-debug/
-        working-directory: src/FantasyTown.Auth
+        run: dotnet publish -c Debug -r ${{ matrix.rid }} --self-contained false --no-restore -o publish/${{ matrix.rid }}-debug/
+
+      - name: Publish Release
+        run: dotnet publish -c Release -r ${{ matrix.rid }} --self-contained false --no-restore -o publish/${{ matrix.rid }}-release/
 
       - name: Upload Debug Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: fix-debug-build
-          path: src/FantasyTown.Auth/publish-debug/
+          name: fix-${{ matrix.rid }}-debug
+          path: publish/${{ matrix.rid }}-debug/
           retention-days: 7
-
-  build-release:
-    name: Build (Release)
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '10.0.x'
-
-      - name: Restore
-        run: dotnet restore
-        working-directory: src/FantasyTown.Auth
-
-      - name: Publish Release
-        run: dotnet publish -c Release --no-restore -o publish-release/
-        working-directory: src/FantasyTown.Auth
 
       - name: Upload Release Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: fix-release-build
-          path: src/FantasyTown.Auth/publish-release/
+          name: fix-${{ matrix.rid }}-release
+          path: publish/${{ matrix.rid }}-release/
           retention-days: 7

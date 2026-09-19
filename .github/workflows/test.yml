@@ -20,15 +20,12 @@ jobs:
 
       - name: Restore
         run: dotnet restore
-        working-directory: src/FantasyTown.Auth
 
       - name: Build
         run: dotnet build --no-restore
-        working-directory: src/FantasyTown.Auth
 
       - name: Test
-        run: dotnet test --no-build --verbosity normal --logger "trx;LogFileName=results.trx"
-        working-directory: tests/FantasyTown.Auth.UnitTests
+        run: dotnet test tests/FantasyTown.Auth.UnitTests --no-build --verbosity normal --logger "trx;LogFileName=results.trx"
 
       - name: Upload Test Results
         if: always()

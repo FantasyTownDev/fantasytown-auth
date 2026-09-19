@@ -11,9 +11,17 @@ on:
 
 jobs:
   build:
-    name: Build (${{ github.ref_name }})
+    name: Build ${{ matrix.rid }} (${{ steps.config.outputs.configuration }})
     runs-on: ubuntu-latest
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    strategy:
+      matrix:
+        rid:
+          - win-x64
+          - win-x86
+          - win-arm64
+          - linux-x64
+          - linux-arm64
     steps:
       - uses: actions/checkout@v4
 
@@ -24,7 +32,6 @@ jobs:
 
       - name: Restore
         run: dotnet restore
-        working-directory: src/FantasyTown.Auth
 
       - name: Determine Configuration
         id: config
@@ -35,32 +42,43 @@ jobs:
             echo "configuration=Debug" >> $GITHUB_OUTPUT
           fi
 
-      - name: Build
-        run: dotnet publish -c ${{ steps.config.outputs.configuration }} --no-restore -o publish/
-        working-directory: src/FantasyTown.Auth
+      - name: Publish
+        run: dotnet publish -c ${{ steps.config.outputs.configuration }} -r ${{ matrix.rid }} --self-contained false --no-restore -o publish/${{ matrix.rid }}/
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.ref_name }}-build-${{ steps.config.outputs.configuration }}
-          path: src/FantasyTown.Auth/publish/
+          name: ${{ github.ref_name }}-${{ matrix.rid }}-${{ steps.config.outputs.configuration }}
+          path: publish/${{ matrix.rid }}/
           retention-days: 7
 
+  release:
+    name: Create Draft Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref_name == 'main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+          pattern: main-*
+
       - name: Extract Version
-        if: github.ref_name == 'main'
         id: version
         run: |
-          VERSION=$(grep -oP '<Version>\K[^<]+' src/FantasyTown.Auth/FantasyTown.Auth.csproj)
+          VERSION=$(grep -oP '<Version>\K[^<]+' FantasyTown.Auth.csproj)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Create Draft Release
-        if: github.ref_name == 'main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.version }}
           name: v${{ steps.version.outputs.version }}
           draft: true
           generate_release_notes: false
-          files: src/FantasyTown.Auth/publish/*
+          files: artifacts/**/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
