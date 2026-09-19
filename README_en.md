@@ -232,4 +232,4 @@ If Redis has a password configured, set it in `appsettings.json`:
 
 ## License
 
-AGPL-3.0 with non-commercial use restrictions. See [LICENSE](LICENSE.en).
+AGPL-3.0 with non-commercial use restrictions. See [LICENSE](LICENSE_en).
