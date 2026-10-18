@@ -1,4 +1,5 @@
 using System.Text.Json;
+using FantasyTown.Auth.Modules.Shared;
 using FantasyTown.Auth.Modules.Yggdrasil.Protocol;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -20,7 +21,7 @@ public static class HasJoinedEndpoint
             var serverId = context.Request.Query["serverId"].FirstOrDefault();
             var logger = context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("HasJoinedEndpoint");
             logger.LogDebug("[HASJOINED] Request: username={Username}, serverId={ServerId}, ip={Ip}",
-                username, serverId, context.Connection.RemoteIpAddress);
+                username, serverId, context.RequestServices.GetRequiredService<IClientIp>().GetClientIp());
 
             if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(serverId))
             {

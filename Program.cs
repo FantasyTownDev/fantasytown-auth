@@ -1,10 +1,14 @@
 using FantasyTown.Auth.Middleware;
 using FantasyTown.Auth.Modules.Accounts.Infrastructure;
+using FantasyTown.Auth.Modules.Shared;
 using FantasyTown.Auth.Modules.Yggdrasil.Authserver;
 using FantasyTown.Auth.Modules.Yggdrasil.Sessions;
 using FantasyTown.Auth.Persistence;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using System.Net;
 using StackExchange.Redis;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
@@ -69,6 +73,26 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
 builder.Services.AddScoped<IPasswordService, Argon2PasswordService>();
 builder.Services.AddScoped<IPermissionSnapshot, RedisPermissionSnapshot>();
 builder.Services.AddScoped<ILockoutService, RedisLockoutService>();
+
+// 4.1 反代信任与客户端 IP（V5 §8：仅信任显式配置的 KnownProxies；未配置时保持直连 RemoteIpAddress 语义）
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<IClientIp, HttpContextClientIp>();
+
+var forwardedHeadersOptions = new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+};
+// 清空框架默认信任（回环），改为纯显式白名单
+forwardedHeadersOptions.KnownIPNetworks.Clear();
+forwardedHeadersOptions.KnownProxies.Clear();
+foreach (var proxy in builder.Configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>() ?? [])
+{
+    if (IPAddress.TryParse(proxy, out var ip))
+    {
+        forwardedHeadersOptions.KnownProxies.Add(ip);
+    }
+}
+builder.Services.AddSingleton(Options.Create(forwardedHeadersOptions));
 
 // 5. Yggdrasil 服务
 var yggOptions = builder.Configuration.GetSection("Yggdrasil").Get<YggOptions>() ?? new YggOptions();
@@ -178,6 +202,9 @@ using (var scope = app.Services.CreateScope())
         }
     }
 }
+
+// 0. 反代头解析（V5 §8：必须位于管道最前端，此后 RemoteIpAddress 即为受信客户端 IP）
+app.UseForwardedHeaders();
 
 // 中间件管道
 if (!app.Environment.IsDevelopment())

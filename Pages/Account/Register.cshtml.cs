@@ -1,6 +1,7 @@
 using FantasyTown.Auth.Middleware;
 using FantasyTown.Auth.Modules.Accounts.Application.Commands;
 using FantasyTown.Auth.Modules.Accounts.Infrastructure;
+using FantasyTown.Auth.Modules.Shared;
 using FantasyTown.Auth.Persistence;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -11,11 +12,13 @@ public class RegisterModel : PageModel
 {
     private readonly AuthDbContext _db;
     private readonly IPasswordService _passwordService;
+    private readonly IClientIp _clientIp;
 
-    public RegisterModel(AuthDbContext db, IPasswordService passwordService)
+    public RegisterModel(AuthDbContext db, IPasswordService passwordService, IClientIp clientIp)
     {
         _db = db;
         _passwordService = passwordService;
+        _clientIp = clientIp;
     }
 
     [BindProperty]
@@ -49,7 +52,7 @@ public class RegisterModel : PageModel
             return Page();
         }
 
-        var clientIp = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        var clientIp = _clientIp.GetClientIp() ?? "unknown";
 
         var handler = new RegisterUserHandler(_db, _passwordService);
         var command = new RegisterUserCommand

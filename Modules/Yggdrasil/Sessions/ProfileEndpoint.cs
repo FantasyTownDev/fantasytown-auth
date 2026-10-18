@@ -1,4 +1,5 @@
 using System.Text.Json;
+using FantasyTown.Auth.Modules.Shared;
 using FantasyTown.Auth.Modules.Yggdrasil.Protocol;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -18,7 +19,8 @@ public static class ProfileEndpoint
         {
             var uuid = context.Request.RouteValues["uuid"]?.ToString();
             var logger = context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("ProfileEndpoint");
-            logger.LogDebug("[PROFILE] Request: uuid={Uuid} from {Ip}", uuid, context.Connection.RemoteIpAddress);
+            logger.LogDebug("[PROFILE] Request: uuid={Uuid} from {Ip}", uuid,
+                context.RequestServices.GetRequiredService<IClientIp>().GetClientIp());
 
             if (string.IsNullOrEmpty(uuid))
             {
