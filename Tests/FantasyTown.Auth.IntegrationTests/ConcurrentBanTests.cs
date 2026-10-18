@@ -46,7 +46,12 @@ public class ConcurrentBanTests : IAsyncLifetime
         return new AuthDbContext(options);
     }
 
-    [Fact]
+    // P4 提前测试：V5 冻结设计（设计方案 §5.3/7.5）规定"每玩家至多一条 active"由
+    // 封禁命令层条件更新闸门保证（MySQL 无部分唯一索引，明确不依赖 DB 约束）。
+    // 封禁命令属 P4 管理域尚未实现，且本用例直接裸插 PlayerBan 实体、不经过闸门，
+    // 按现状无法验证设计不变量。P4 时须按实施指导 §5 测试矩阵重写为：
+    // 并发双封 + 过期续封混合场景，经封禁命令执行后终态断言 COUNT(active) <= 1。
+    [Fact(Skip = "P4 rewrite target: must exercise ban command conditional gate (V5 §5.3/7.5), raw EF inserts bypass the gate by design")]
     public async Task ConcurrentBan_ShouldHaveAtMostOneActiveBan()
     {
         const int concurrentCount = 20;
