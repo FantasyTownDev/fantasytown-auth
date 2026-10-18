@@ -5,6 +5,8 @@ using FantasyTown.Auth.Modules.Yggdrasil.Authserver;
 using FantasyTown.Auth.Modules.Yggdrasil.Sessions;
 using FantasyTown.Auth.Persistence;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.DataProtection.StackExchangeRedis;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -38,7 +40,13 @@ if (!string.IsNullOrEmpty(redisPassword))
 else
     Console.WriteLine("[Redis] WARNING: No password configured!");
 
-builder.Services.AddSingleton<IConnectionMultiplexer>(ConnectionMultiplexer.Connect(redisConfig));
+var redisConnection = ConnectionMultiplexer.Connect(redisConfig);
+builder.Services.AddSingleton<IConnectionMultiplexer>(redisConnection);
+
+// DataProtection 密钥 Redis 化（V5 §9.6/§10：多实例共享；重新部署不丢已签发限时令牌）
+builder.Services.AddDataProtection()
+    .PersistKeysToStackExchangeRedis(redisConnection, "DATA_PROTECT:keys")
+    .SetApplicationName("FantasyTown.Auth");
 
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<AuthDbContext>()
