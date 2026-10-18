@@ -1,6 +1,4 @@
 using FantasyTown.Auth.Modules.Yggdrasil.Authserver;
-using FantasyTown.Auth.Persistence;
-using Microsoft.EntityFrameworkCore;
 
 namespace FantasyTown.Auth.Modules.Yggdrasil.Sessions;
 
@@ -10,40 +8,28 @@ namespace FantasyTown.Auth.Modules.Yggdrasil.Sessions;
 /// </summary>
 public sealed class JoinHandler
 {
-    private readonly AuthDbContext _db;
     private readonly ITokenService _tokenService;
     private readonly ITicketService _ticketService;
 
-    public JoinHandler(AuthDbContext db, ITokenService tokenService, ITicketService ticketService)
+    public JoinHandler(ITokenService tokenService, ITicketService ticketService)
     {
-        _db = db;
         _tokenService = tokenService;
         _ticketService = ticketService;
     }
 
     public async Task<JoinResult> HandleAsync(string accessToken, string selectedProfileId, string serverId, CancellationToken cancellationToken = default)
     {
-        // 1. 尝试验证令牌
+        // 1. 验证令牌（V5 §6.7：令牌无效或不匹配 → 403，无回退分支）
         var token = await _tokenService.ValidateAsync(accessToken, cancellationToken);
 
-        if (token != null)
+        if (token == null)
         {
-            // 令牌有效，验证 profileId 匹配（大小写无关）
-            if (!string.Equals(token.ProfileId, selectedProfileId, StringComparison.OrdinalIgnoreCase))
-            {
-                return JoinResult.Invalid();
-            }
+            return JoinResult.Invalid();
         }
-        else
+
+        if (!string.Equals(token.ProfileId, selectedProfileId, StringComparison.OrdinalIgnoreCase))
         {
-            // authlib-injector 服务端生成自己的 token，不在 Redis 中
-            // 验证 selectedProfileId 对应的玩家存在
-            var playerExists = await _db.Players
-                .AnyAsync(p => p.Uuid == selectedProfileId, cancellationToken);
-            if (!playerExists)
-            {
-                return JoinResult.Invalid();
-            }
+            return JoinResult.Invalid();
         }
 
         // 2. 存储票据（60s 有效）

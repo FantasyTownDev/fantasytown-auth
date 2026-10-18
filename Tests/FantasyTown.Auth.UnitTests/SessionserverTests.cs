@@ -196,7 +196,7 @@ public class JoinHandlerTests : IDisposable
         _db = new AuthDbContext(options);
         _tokenService = new InMemoryTokenService();
         _ticketService = new InMemoryTicketService();
-        _handler = new JoinHandler(_db, _tokenService, _ticketService);
+        _handler = new JoinHandler(_tokenService, _ticketService);
     }
 
     public void Dispose() => _db.Dispose();
@@ -231,6 +231,26 @@ public class JoinHandlerTests : IDisposable
     {
         var result = await _handler.HandleAsync("invalid-token", "abc", "server-123");
         Assert.False(result.IsValid);
+    }
+
+    [Fact]
+    public async Task HandleAsync_InvalidTokenEvenIfPlayerExists_ReturnsInvalidAndCreatesNoTicket()
+    {
+        // T3-001 回归：旧"玩家存在即放行"回退分支 = 认证绕过；V5 §6.7 令牌无效 → 403，无条件拒绝
+        _db.Players.Add(new Player
+        {
+            Uid = 1,
+            Name = "Victim",
+            Uuid = "abc",
+            IsBanned = false,
+            LastModified = DateTime.UtcNow
+        });
+        await _db.SaveChangesAsync();
+
+        var result = await _handler.HandleAsync("forged-token", "abc", "server-bypass");
+
+        Assert.False(result.IsValid);
+        Assert.Null(await _ticketService.ConsumeAsync("server-bypass"));
     }
 
     [Fact]
