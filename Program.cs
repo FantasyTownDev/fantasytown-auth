@@ -97,11 +97,6 @@ builder.Services.AddSingleton(Options.Create(forwardedHeadersOptions));
 // 5. Yggdrasil 服务
 var yggOptions = builder.Configuration.GetSection("Yggdrasil").Get<YggOptions>() ?? new YggOptions();
 builder.Services.AddSingleton(yggOptions);
-builder.Services.AddSingleton(sp =>
-{
-    var redis = sp.GetRequiredService<IConnectionMultiplexer>();
-    return new AccountRateLimiter(redis);
-});
 builder.Services.AddSingleton<AuthConcurrencyLimiter>();
 builder.Services.AddSingleton<IRateLimiter>(sp =>
 {

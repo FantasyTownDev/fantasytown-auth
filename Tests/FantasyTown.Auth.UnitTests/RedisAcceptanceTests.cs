@@ -41,59 +41,94 @@ public class RedisAcceptanceTests : IDisposable
     }
 
     /// <summary>
-    /// 同 IP 5 次失败 → LOCKOUT 生效
+    /// V5 §6.6：同 IP 同账户 5 次失败 → 触发 LOCKOUT:{uid}（冻结键名直接断言）
     /// </summary>
     [Fact]
-    public async Task Lockout_AfterFiveFailedAttempts_ShouldBeLocked()
+    public async Task Lockout_FiveSameIpFailures_ShouldTriggerLockout()
     {
-        var identifier = $"IP:192.168.1.100_{Guid.NewGuid()}";
+        var uid = Random.Shared.Next(50000, 60000);
+        var email = $"victim_{Guid.NewGuid():N}@test.local";
+        var ip = "192.168.1.100";
 
-        // 记录 5 次失败
+        LockoutFailureResult? last = null;
         for (int i = 0; i < 5; i++)
         {
-            await _lockoutService.RecordFailureAsync(identifier);
+            last = await _lockoutService.RecordFailureAsync(uid, email, ip);
         }
 
-        // 应该被锁定
-        var isLocked = await _lockoutService.IsLockedOutAsync(identifier);
-        Assert.True(isLocked);
+        Assert.Equal(5, last!.FailureCount);
+        Assert.True(last.LockoutTriggered);
+        Assert.True(await _lockoutService.IsLockedOutAsync(uid));
+
+        // §3.4 冻结键空间直接断言
+        var db = _redis.GetDatabase(15);
+        Assert.True(await db.KeyExistsAsync($"LOCKOUT:{uid}"));
+        Assert.Equal(5, await db.SortedSetLengthAsync($"FAIL_EP:{email}:{ip}"));
+        Assert.Equal(5, await db.SortedSetLengthAsync($"FAIL_ACCT:{email}"));
 
         // 应该有剩余锁定时间
-        var remaining = await _lockoutService.GetRemainingLockoutSecondsAsync(identifier);
+        var remaining = await _lockoutService.GetRemainingLockoutSecondsAsync(uid);
         Assert.NotNull(remaining);
         Assert.True(remaining > 0);
 
         // 清理
-        await _lockoutService.ResetAsync(identifier);
+        await _lockoutService.ResetAsync(uid, email, ip);
     }
 
     /// <summary>
-    /// 4 次失败 → 不锁定
+    /// V5 §6.6：同 IP 4 次失败 → 不触发锁定
     /// </summary>
     [Fact]
-    public async Task Lockout_FourFailedAttempts_ShouldNotBeLocked()
+    public async Task Lockout_FourSameIpFailures_ShouldNotTriggerLockout()
     {
-        var identifier = $"IP:192.168.1.101_{Guid.NewGuid()}";
+        var uid = Random.Shared.Next(50000, 60000);
+        var email = $"victim_{Guid.NewGuid():N}@test.local";
+        var ip = "192.168.1.101";
 
-        // 记录 4 次失败
+        LockoutFailureResult? last = null;
         for (int i = 0; i < 4; i++)
         {
-            await _lockoutService.RecordFailureAsync(identifier);
+            last = await _lockoutService.RecordFailureAsync(uid, email, ip);
         }
 
-        // 不应该被锁定
-        var isLocked = await _lockoutService.IsLockedOutAsync(identifier);
-        Assert.False(isLocked);
+        Assert.Equal(4, last!.FailureCount);
+        Assert.False(last.LockoutTriggered);
+        Assert.False(await _lockoutService.IsLockedOutAsync(uid));
 
         // 清理
-        await _lockoutService.ResetAsync(identifier);
+        await _lockoutService.ResetAsync(uid, email, ip);
     }
 
     /// <summary>
-    /// 登录失败记录到 Redis
+    /// T3-003 回归：跨 IP 分散失败（5 个不同 IP 各 1 次）不得触发锁定，
+    /// 仅计入 FAIL_ACCT:{email}（审计维度，不锁定）
     /// </summary>
     [Fact]
-    public async Task LoginFailed_ShouldRecordToRedis()
+    public async Task Lockout_CrossIpDistributedFailures_ShouldNotTriggerLockout()
+    {
+        var uid = Random.Shared.Next(50000, 60000);
+        var email = $"victim_{Guid.NewGuid():N}@test.local";
+
+        for (int i = 0; i < 5; i++)
+        {
+            var result = await _lockoutService.RecordFailureAsync(uid, email, $"10.10.{i}.1");
+            Assert.False(result.LockoutTriggered);
+        }
+
+        Assert.False(await _lockoutService.IsLockedOutAsync(uid));
+
+        // 冻结键空间断言：无 LOCKOUT，FAIL_ACCT 累计 5（审计维度）
+        var db = _redis.GetDatabase(15);
+        Assert.False(await db.KeyExistsAsync($"LOCKOUT:{uid}"));
+        Assert.Equal(5, await db.SortedSetLengthAsync($"FAIL_ACCT:{email}"));
+    }
+
+    /// <summary>
+    /// Web 登录同 IP 失败 5 次 → LOCKOUT:{uid} 生效
+    /// （Ygg authenticate 检查同一键空间，任一通道触发即全域锁定，§6.6）
+    /// </summary>
+    [Fact]
+    public async Task LoginFailed_ShouldLockAccountViaSharedKeyspace()
     {
         using var db = CreateInMemoryDbContext();
         var registerHandler = new RegisterUserHandler(db, _passwordService);
@@ -108,6 +143,7 @@ public class RedisAcceptanceTests : IDisposable
             ClientIp = "127.0.0.1"
         });
         Assert.True(regResult.IsSuccess, $"Registration failed: {regResult.ErrorMessage}");
+        var uid = regResult.UserId!.Value;
 
         // 使用错误密码登录 5 次
         var permissionSnapshot = new InMemoryPermissionSnapshot();
@@ -126,15 +162,16 @@ public class RedisAcceptanceTests : IDisposable
                 });
             }
 
-            // IP 应该被锁定
-            var isLocked = await _lockoutService.IsLockedOutAsync($"IP:{clientIp}");
-            Assert.True(isLocked,
-                $"IP:{clientIp} should be locked after 5 failed attempts. " +
+            // LOCKOUT:{uid} 键空间直接断言（Web 触发，Ygg 通道检查同一键）
+            var db15 = _redis.GetDatabase(15);
+            Assert.True(await db15.KeyExistsAsync($"LOCKOUT:{uid}"),
+                $"LOCKOUT:{uid} should exist after 5 same-IP failures. " +
                 $"Last login result: IsSuccess={lastLoginResult?.IsSuccess}, Error={lastLoginResult?.ErrorMessage}");
         }
         finally
         {
-            await _lockoutService.ResetAsync($"IP:{clientIp}");
+            var user = await db.Users.FirstAsync(u => u.Uid == uid);
+            await _lockoutService.ResetAsync(uid, user.Email, clientIp);
         }
     }
 

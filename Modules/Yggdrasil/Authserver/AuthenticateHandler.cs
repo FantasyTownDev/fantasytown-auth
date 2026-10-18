@@ -21,7 +21,6 @@ public sealed class AuthenticateHandler
     private readonly ITokenService _tokenService;
     private readonly YggOptions _options;
     private readonly AuthConcurrencyLimiter _concurrencyLimiter;
-    private const int MaxFailedAttempts = 5;
 
     public AuthenticateHandler(
         AuthDbContext db,
@@ -67,7 +66,8 @@ public sealed class AuthenticateHandler
 
         if (user == null)
         {
-            // 用户不存在，执行等耗时 dummy hash 防枚举
+            // 用户不存在：仅记 FAIL_ACCT 审计维度（V5 §6.6，不触发锁定），执行等耗时 dummy hash 防枚举
+            await _lockoutService.RecordUnknownAccountFailureAsync(request.Username, cancellationToken);
             await _passwordService.VerifyPasswordAsync(request.Password, string.Empty, cancellationToken);
             return AuthenticateResult.Forbidden("Invalid credentials. Invalid username or password.");
         }
@@ -90,8 +90,8 @@ public sealed class AuthenticateHandler
             }
         }
 
-        // 4. LOCKOUT 检查（跨通道共享）
-        if (await _lockoutService.IsLockedOutAsync($"USER:{user.Uid}", cancellationToken))
+        // 4. LOCKOUT 检查（LOCKOUT:{uid}，Web 与 Ygg authenticate 共享键空间）
+        if (await _lockoutService.IsLockedOutAsync(user.Uid, cancellationToken))
         {
             return AuthenticateResult.Forbidden("Invalid credentials. Invalid username or password.");
         }
@@ -101,18 +101,14 @@ public sealed class AuthenticateHandler
 
         if (!passwordValid)
         {
-            // 密码错误，记录失败
-            var failureCount = await _lockoutService.RecordFailureAsync($"USER:{user.Uid}", cancellationToken);
-
-            // 记录 FAIL_EP 滑动窗（email:ip 维度）
-            await _lockoutService.RecordFailureAsync($"EP:{request.Username}:{clientIp}", cancellationToken);
+            // 记录失败：FAIL_EP:{email}:{ip}（同 IP 窗口 ≥5 触发 LOCKOUT）+ FAIL_ACCT:{email}（审计）
+            await _lockoutService.RecordFailureAsync(user.Uid, user.Email, clientIp, cancellationToken);
 
             return AuthenticateResult.Forbidden("Invalid credentials. Invalid username or password.");
         }
 
-        // 6. 密码正确，重置失败计数
-        await _lockoutService.ResetAsync($"USER:{user.Uid}", cancellationToken);
-        await _lockoutService.ResetAsync($"EP:{request.Username}:{clientIp}", cancellationToken);
+        // 6. 密码正确，清除 LOCKOUT:{uid} 与 FAIL_EP:{email}:{ip}
+        await _lockoutService.ResetAsync(user.Uid, user.Email, clientIp, cancellationToken);
 
         // 7. 查找玩家信息
         var player = user.Player;
