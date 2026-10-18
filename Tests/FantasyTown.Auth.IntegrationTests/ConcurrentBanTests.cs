@@ -52,9 +52,11 @@ public class ConcurrentBanTests : IAsyncLifetime
         const int concurrentCount = 20;
         using var context = CreateContext();
 
+        // 每次运行唯一邮箱/角色名：避免与注册测试类（并行）及历史残留冲突
+        var rid = Guid.NewGuid().ToString("N")[..8];
         var user = new User
         {
-            Email = "test@example.com",
+            Email = $"banhost-{rid}@example.com",
             Password = "hashedpassword",
             Permission = UserPermission.NormalPlayer,
             SecurityStamp = Guid.NewGuid().ToString()
@@ -65,7 +67,7 @@ public class ConcurrentBanTests : IAsyncLifetime
         var player = new Player
         {
             Uid = user.Uid,
-            Name = "TestPlayer",
+            Name = $"BanPlayer-{rid}",
             Uuid = Guid.NewGuid().ToString("N").ToUpper()
         };
         context.Players.Add(player);

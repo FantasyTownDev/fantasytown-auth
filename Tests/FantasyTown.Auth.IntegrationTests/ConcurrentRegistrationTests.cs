@@ -58,6 +58,10 @@ public class ConcurrentRegistrationTests : IAsyncLifetime
     public async Task ConcurrentRegistration_ShouldAllowExactlyOneSuccess()
     {
         const int concurrentCount = 50;
+        // 每次运行唯一邮箱/角色名：避免跨运行残留 / 跨测试类并行冲突（CI 与本地持久库通用）
+        var rid = Guid.NewGuid().ToString("N")[..8];
+        var runEmail = $"loadtest-{rid}@example.com";
+        var runName = $"LoadPlyr{rid}";
         var results = new ConcurrentBag<RegisterUserResult>();
         var tasks = new List<Task>();
 
@@ -69,8 +73,8 @@ public class ConcurrentRegistrationTests : IAsyncLifetime
                 var handler = new RegisterUserHandler(context, new FakePasswordService());
                 var command = new RegisterUserCommand
                 {
-                    Email = "test@example.com",
-                    Username = "TestPlayer",
+                    Email = runEmail,
+                    Username = runName,
                     Password = "Password123!",
                     ClientIp = "127.0.0.1"
                 };
@@ -94,6 +98,8 @@ public class ConcurrentRegistrationTests : IAsyncLifetime
     public async Task ConcurrentRegistration_DifferentEmails_ShouldAllSucceed()
     {
         const int concurrentCount = 10;
+        // 每次运行唯一前缀：邮箱与角色名均不与历史残留/其他测试类冲突
+        var rid = Guid.NewGuid().ToString("N")[..8];
         var results = new ConcurrentBag<RegisterUserResult>();
         var tasks = new List<Task>();
 
@@ -106,8 +112,8 @@ public class ConcurrentRegistrationTests : IAsyncLifetime
                 var handler = new RegisterUserHandler(context, new FakePasswordService());
                 var command = new RegisterUserCommand
                 {
-                    Email = $"user{index}@example.com",
-                    Username = $"Player{index}",
+                    Email = $"user{index}-{rid}@example.com",
+                    Username = $"Player{index}_{rid}",
                     Password = "Password123!",
                     ClientIp = "127.0.0.1"
                 };
