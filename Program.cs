@@ -18,9 +18,16 @@ using OpenTelemetry.Trace;
 var builder = WebApplication.CreateBuilder(args);
 
 // 1. 基础设施
+// T3-005：基础配置不携带可用凭据，通过环境变量注入（V5 §10：Secret → 容器/环境变量）
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+if (string.IsNullOrWhiteSpace(connectionString))
+{
+    throw new InvalidOperationException(
+        "ConnectionStrings:DefaultConnection is not configured. " +
+        "Inject credentials via environment variable ConnectionStrings__DefaultConnection (V5 §10).");
+}
 builder.Services.AddDbContextPool<AuthDbContext>(options =>
 {
-    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
     options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString));
 });
 
@@ -38,7 +45,7 @@ redisConfig.EndPoints.Add(redisHost);
 if (!string.IsNullOrEmpty(redisPassword))
     Console.WriteLine($"[Redis] Connecting with password (length={redisPassword.Length})");
 else
-    Console.WriteLine("[Redis] WARNING: No password configured!");
+    Console.WriteLine("[Redis] WARNING: No password configured! Inject Redis__Password via environment in production (V5 §10).");
 
 var redisConnection = ConnectionMultiplexer.Connect(redisConfig);
 builder.Services.AddSingleton<IConnectionMultiplexer>(redisConnection);
