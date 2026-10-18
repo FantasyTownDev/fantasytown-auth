@@ -15,14 +15,12 @@ namespace FantasyTown.Auth.IntegrationTests;
 [Trait("Category", "Integration")]
 public class ConcurrentRegistrationTests : IAsyncLifetime
 {
-    private bool _useTestcontainers;
     private string _connectionString = null!;
 
     public async Task InitializeAsync()
     {
         if (DockerHelper.IsAvailable())
         {
-            _useTestcontainers = true;
             var container = new Testcontainers.MySql.MySqlBuilder()
                 .WithDatabase("fantasytown_test")
                 .WithUsername("test")
@@ -33,7 +31,6 @@ public class ConcurrentRegistrationTests : IAsyncLifetime
         }
         else
         {
-            _useTestcontainers = false;
             _connectionString = TestDbContextFactory.GetConnectionString();
         }
 
