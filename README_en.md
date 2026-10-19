@@ -37,7 +37,7 @@ A minimal Minecraft third-party authentication kernel: Yggdrasil protocol for no
 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
 - MariaDB 10.5+ (11.x LTS recommended, 12.x compatible but not officially tested by Pomelo)
-- Redis 7+ (recommended) or Memurai (Windows dev only)
+- Redis 7+ (required); Memurai can substitute on Windows dev
 
 ### Configuration
 
@@ -52,6 +52,9 @@ Edit `appsettings.json`:
     "Connection": "localhost:6379",
     "Password": ""
   },
+  "Site": {
+    "Url": "http://example.com:5000"
+  },
   "Yggdrasil": {
     "SkinBaseUrl": "http://example.com:5000",
     "SkinDomains": ["example.com"]
@@ -60,6 +63,8 @@ Edit `appsettings.json`:
 ```
 
 > **SkinBaseUrl Format**: `http://example.com:5000`, `http://example.com`, `https://example.com`, `https://example.com:5000` are all valid. The Minecraft client validates that the texture URL domain is in the `SkinDomains` whitelist.
+
+> **Credential storage**: write production credentials into `appsettings.json` and protect the file with `chmod 600` — see [Production Deployment](#production-deployment). A future release will introduce a locally stored, asymmetrically-encrypted credential config (high-security storage with seamless upgrade compatibility).
 
 ### Run
 
@@ -74,6 +79,58 @@ The application starts on `http://0.0.0.0:5000`.
 ```bash
 curl http://localhost:5000/health
 ```
+
+## Production Deployment
+
+### Publish
+
+```bash
+dotnet publish FantasyTown.Auth.csproj -c Release -r linux-x64 --self-contained false -o ./publish
+```
+
+Framework-dependent publish (`--self-contained false`) requires the [.NET Runtime 10](https://dotnet.microsoft.com/download/dotnet/10.0) on the server; use `--self-contained true` for a self-contained publish that needs no runtime installation.
+
+### Prerequisites (both required)
+
+| Dependency | Notes |
+|---|---|
+| MariaDB 10.5+ (or MySQL 8.0+) | Create an empty database and grant access — **EF migrations create all tables automatically on first startup**; the database must be reachable at startup (fail-fast: the process exits with a clear error otherwise) |
+| Redis 7+ | **Required**: connected at startup; tokens / tickets / rate-limit counters / lockout / DataProtection key ring all live here |
+
+### Configuration
+
+For this release, write production credentials directly into `appsettings.json` and tighten file permissions:
+
+```bash
+chmod 600 appsettings.json
+```
+
+Required settings:
+
+| Key | Description |
+|---|---|
+| `ConnectionStrings:DefaultConnection` | Database connection string (startup fails if left empty) |
+| `Redis:Connection` | Redis endpoint, e.g. `localhost:6379` |
+| `Redis:Password` | Redis password; leave empty if Redis has none (a security warning is logged at startup) |
+| `Site:Url` | Publicly reachable base URL (password-reset links etc. are built from it) |
+| `Kestrel:Endpoints:Http:Url` | Listen URL, defaults to `http://0.0.0.0:5000` |
+
+For a MariaDB that only exposes a unix socket on Linux (MySqlConnector 2.4.0):
+
+```
+Server=/run/mariadb/mariadb.sock;Database=fantasytown_auth;User ID=your_user;ConnectionProtocol=UnixSocket;
+```
+
+The socket path goes into `Server` and `ConnectionProtocol=UnixSocket` must be declared explicitly (this version does not support the `Unix Socket=` key). Any configuration key can also be overridden via environment variables (e.g. `ConnectionStrings__DefaultConnection`) in container / multi-host setups.
+
+### Start & Verify
+
+```bash
+dotnet FantasyTown.Auth.dll
+curl -f http://localhost:5000/health   # HTTP 200 means ready
+```
+
+When using systemd, declare `After=mariadb.service redis-server.service` (or your distribution's equivalents) so the database is already reachable at application startup.
 
 ## Project Structure
 
@@ -90,7 +147,8 @@ FantasyTown.Auth/
 │   │   ├── Sessions/               # join/hasJoined/profile + TicketService + signing
 │   │   └── Protocol/               # Frozen DTOs + JsonSourceGeneration
 │   └── Shared/                     # Shared: Result, IClock, IClientIp, IAuditChannel
-├── Persistence/                    # EF Core DbContext, migrations
+├── Persistence/                    # EF Core DbContext
+├── Migrations/                     # EF Core initial migration (6-table InitialCreate)
 ├── Middleware/                     # RejectBannedUser middleware
 └── Pages/                          # Razor Pages: login/register/forgot-password/reset-password
 ```
@@ -147,8 +205,15 @@ If Redis has a password configured, set it in `appsettings.json`:
 - User enumeration prevention (uniform response + timing equalization)
 - Atomic token issuance (Redis Lua scripts)
 - Tiered rate limiting (IP fixed window + account x IP sliding window)
+- Registration IP quota (default 3 accounts per IP; requests over quota are rejected)
+- Failed-login lockout with exponential backoff (15 / 30 / 60 minutes)
 - Immediate banned-user interception (PERM snapshot + RejectBannedUser middleware)
 - RSA-SHA1 texture signing (authlib-injector compatible)
+
+## Known Limitations
+
+- **Email channel in development**: the password-reset token pipeline is ready, but mail delivery is not yet wired up — submitting the forgot-password form currently sends no email. For an urgent reset, update the password hash in the database directly (Argon2 PHC format). Mail delivery is on the roadmap
+- **Admin UI in development**: `/admin` pages ship with the P4 milestone; currently bans and permission changes require direct database operations
 
 ## Roadmap
 
@@ -177,7 +242,7 @@ If Redis has a password configured, set it in `appsettings.json`:
 - [x] Concurrent registration = exactly 1 (unit test coverage)
 - [x] Permission rules (four-tier enum + whitelist exact match)
 - [x] Ban rules (BanRules + IsBanEffective time predicate)
-- [x] 203 unit tests all passing
+- [x] Unit tests all passing
 
 ### P2: Yggdrasil Authserver (Done)
 
@@ -202,9 +267,17 @@ If Redis has a password configured, set it in `appsettings.json`:
 - [x] Server-wide synchronized visibility (texture pass-back verification)
 - [x] hasJoined P99 < 50ms
 
-### P4: Admin Domain (Pending)
+### P3.5: Pre-Admin Hardening (Done)
 
-- [ ] ManagementGuard three functions (CanManage / CanClearLockout / CanExecuteAction)
+- [x] Stateless password-reset tokens (DataProtection time-limited protection, per frozen design §4.5)
+- [x] Registration IP quota (REG_IP snapshot counting)
+- [x] Credential hardcoding removed (connection-string defaults cleared; missing config fails fast)
+- [x] Atomic concurrent saves (registration race committed in a single SaveChanges)
+- [x] Linux x64 production verification (MariaDB unix socket + Redis)
+
+### P4: Admin Domain (In Progress)
+
+- [x] ManagementGuard three functions (CanManage / NotSelf / CanClearLockout)
 - [ ] /admin authorization policies (moderator / owner / admin)
 - [ ] /admin area global no-cache middleware
 - [ ] Management pipeline (Antiforgery > Policy > Privilege Matrix > Double-Confirm > Domain Command > Side Effects > Audit > PRG)
@@ -213,7 +286,7 @@ If Redis has a password configured, set it in `appsettings.json`:
 - [ ] /admin user management pages (list / detail / ban / unban / permission / force-reset-password / email / soft-delete)
 - [ ] /admin moderator management pages (list)
 - [ ] /admin lockout management pages (clear lockout)
-- [ ] ManagementGuard unit tests (CanManage full combinations + CanClearLockout self-pass anchor)
+- [x] ManagementGuard unit tests (CanManage full combinations + CanClearLockout self-pass anchor)
 - [ ] Admin domain regression tests (privilege matrix full coverage + double-confirm + audit persistence)
 
 ### P5: Hardening & Stress Test (Pending)
