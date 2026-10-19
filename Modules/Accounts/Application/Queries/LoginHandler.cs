@@ -54,9 +54,10 @@ public sealed class LoginHandler
         }
 
         // 2. 检查是否被软删除
+        // 防枚举（审计 H2）：与未知账号统一报错话术，差异仅留审计（IAuditChannel P4 接入）
         if (user.IsDeleted)
         {
-            return LoginResult.Failure("账户不存在");
+            return LoginResult.Failure("用户名或密码错误");
         }
 
         // 3. 检查是否被封禁（时间谓词）
