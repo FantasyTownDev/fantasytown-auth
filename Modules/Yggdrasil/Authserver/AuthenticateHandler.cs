@@ -79,15 +79,11 @@ public sealed class AuthenticateHandler
             return AuthenticateResult.Forbidden("Invalid credentials. Invalid username or password.");
         }
 
-        // 3. 封禁前置检查 (M9) — 不验密，节省 CPU
+        // 3. 封禁前置检查 (M9) — 不验密，节省 CPU；null 快照按封禁等效哨兵拒绝（C3 / V5 N2）
         var snapshot = await _permissionSnapshot.GetAsync(user.Uid, cancellationToken);
-        if (snapshot != null)
+        if (snapshot == null || BanRules.IsBanEffective(snapshot.IsBanned, snapshot.BannedUntil, DateTime.UtcNow))
         {
-            var isBanned = BanRules.IsBanEffective(snapshot.IsBanned, snapshot.BannedUntil, DateTime.UtcNow);
-            if (isBanned)
-            {
-                return AuthenticateResult.Forbidden("Invalid credentials. Invalid username or password.");
-            }
+            return AuthenticateResult.Forbidden("Invalid credentials. Invalid username or password.");
         }
 
         // 4. LOCKOUT 检查（LOCKOUT:{uid}，Web 与 Ygg authenticate 共享键空间）

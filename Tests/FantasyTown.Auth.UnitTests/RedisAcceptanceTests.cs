@@ -221,7 +221,10 @@ public class RedisAcceptanceTests : IDisposable
         await snapshot.RemoveAsync(uid);
         var result = await snapshot.GetAsync(uid);
 
-        Assert.Null(result);
+        // C3 / V5 N2：移除后回源空结果返回封禁等效哨兵，不再是 null
+        Assert.NotNull(result);
+        Assert.True(result!.IsBanned);
+        Assert.Null(result.BannedUntil);
     }
 
     /// <summary>
@@ -246,9 +249,34 @@ public class RedisAcceptanceTests : IDisposable
         // 撤销权限（清除快照）
         await snapshot.RemoveAsync(uid);
 
-        // 快照应该为空
+        // C3 / V5 N2：撤销后回源空 = 封禁等效哨兵（Web 会话即时失效）
         var result = await snapshot.GetAsync(uid);
-        Assert.Null(result);
+        Assert.NotNull(result);
+        Assert.True(result!.IsBanned);
+    }
+
+    /// <summary>
+    /// C3 / V5 N2：回源空结果 = 封禁等效哨兵且写入冻结键名缓存（防穿透）
+    /// </summary>
+    [Fact]
+    public async Task PermissionSnapshot_EmptySource_ReturnsCachedBanSentinel()
+    {
+        var snapshot = new RedisPermissionSnapshot(_redis, CreateInMemoryDbContext(), database: 15);
+        var uid = 99996;
+
+        var result = await snapshot.GetAsync(uid);
+
+        Assert.NotNull(result);
+        Assert.True(result!.IsBanned);
+        Assert.Null(result.BannedUntil);
+        Assert.Equal(UserPermission.NormalPlayer, result.Permission);
+
+        // 哨兵是可缓存值：写入 PERM:{uid}（冻结键名）防 miss-on-empty 回源风暴
+        var db15 = _redis.GetDatabase(15);
+        Assert.True(await db15.KeyExistsAsync($"PERM:{uid}"));
+
+        // 清理
+        await snapshot.RemoveAsync(uid);
     }
 
     public void Dispose()

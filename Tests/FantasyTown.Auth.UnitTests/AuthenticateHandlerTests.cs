@@ -70,6 +70,14 @@ public class AuthenticateHandlerTests : IDisposable
             await _db.SaveChangesAsync();
         }
 
+        // C3：播种账户权限快照（生产语义：回源后 PERM 快照存在；null 快照将按封禁等效拒绝）
+        await _permissionSnapshot.SetAsync(user.Uid, new PermissionSnapshot
+        {
+            Permission = UserPermission.NormalPlayer,
+            IsBanned = false,
+            CreatedAt = DateTime.UtcNow
+        });
+
         return user;
     }
 
@@ -151,6 +159,25 @@ public class AuthenticateHandlerTests : IDisposable
         Assert.Equal(403, result.StatusCode);
         // 密码不应该被验证
         Assert.Equal(0, _passwordService.VerifyCount);
+    }
+
+    [Fact]
+    public async Task HandleAsync_NullSnapshot_ShouldReturnForbidden()
+    {
+        // C3 回归：null 快照 = 封禁等效哨兵，不得按"无权限记录 = 允许"放行
+        var user = await CreateUser();
+        await _permissionSnapshot.RemoveAsync(user.Uid);
+
+        var request = new AuthenticateRequest
+        {
+            Username = "test@test.com",
+            Password = "password123"
+        };
+
+        var result = await _handler.HandleAsync(request, "127.0.0.1");
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(403, result.StatusCode);
     }
 
     [Fact]
