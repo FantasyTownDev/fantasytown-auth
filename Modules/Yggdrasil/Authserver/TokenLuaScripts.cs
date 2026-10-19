@@ -24,6 +24,24 @@ return 1
 ");
 
     /// <summary>
+    /// 原子刷新令牌（V5 §5.4 Lua 规格 / 审计 C4）：
+    /// 1. 读取 ID:{email} → DEL 其指向的旧 TOKEN（若指向别处一并清理）
+    /// 2. DEL 被刷新的 TOKEN:{旧 accessToken}
+    /// 3. SET ID:{email} = 新 accessToken (EX ttl)——重挂反向链
+    /// 4. SET TOKEN:{新 accessToken} = 新 tokenJson (EX ttl)
+    /// </summary>
+    public static readonly LuaScript Refresh = LuaScript.Prepare(@"
+local tracked = redis.call('GET', @idKey)
+if tracked then
+    redis.call('DEL', @tokenPrefix .. tracked)
+end
+redis.call('DEL', @tokenPrefix .. @oldAccessToken)
+redis.call('SET', @idKey, @accessToken, 'EX', @ttl)
+redis.call('SET', @tokenKey, @tokenJson, 'EX', @ttl)
+return 1
+");
+
+    /// <summary>
     /// 全吊销令牌：
     /// 1. 读取 ID:{email} → 如果存在则 DEL 旧 TOKEN
     /// 2. DEL ID:{email}

@@ -20,6 +20,7 @@ public sealed class InMemoryTokenService : ITokenService
         var token = new TokenRecord
         {
             OwnerUid = uid,
+            Email = email,
             ClientToken = clientToken,
             AccessToken = accessToken,
             ProfileId = profileId,
@@ -78,6 +79,7 @@ public sealed class InMemoryTokenService : ITokenService
             var newToken = new TokenRecord
             {
                 OwnerUid = oldToken.OwnerUid,
+                Email = oldToken.Email,
                 ClientToken = clientToken ?? oldToken.ClientToken,
                 AccessToken = newAccessToken,
                 ProfileId = newProfileId ?? oldToken.ProfileId,
