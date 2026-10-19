@@ -88,6 +88,14 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
 builder.Services.AddScoped<IPasswordService, Argon2PasswordService>();
 builder.Services.AddScoped<IPermissionSnapshot, RedisPermissionSnapshot>();
 builder.Services.AddScoped<ILockoutService, RedisLockoutService>();
+// 站点选项（V5 配置表 options 项；DB 表热加载随 options 轨道接入）
+builder.Services.AddSingleton(new SiteOptions());
+// 注册配额（V5 §3.4 REG_IP:{ip}，软配额前置粗检 + 成功后计数）
+builder.Services.AddScoped<IRegistrationQuotaService>(sp =>
+    new RedisRegistrationQuotaService(
+        sp.GetRequiredService<IConnectionMultiplexer>(),
+        sp.GetRequiredService<SiteOptions>(),
+        sp.GetRequiredService<ILogger<RedisRegistrationQuotaService>>()));
 
 // 4.1 反代信任与客户端 IP（V5 §8：仅信任显式配置的 KnownProxies；未配置时保持直连 RemoteIpAddress 语义）
 builder.Services.AddHttpContextAccessor();

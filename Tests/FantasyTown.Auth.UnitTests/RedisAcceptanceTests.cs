@@ -212,7 +212,7 @@ public class RedisAcceptanceTests : IDisposable
     public async Task LoginFailed_ShouldLockAccountViaSharedKeyspace()
     {
         using var db = CreateInMemoryDbContext();
-        var registerHandler = new RegisterUserHandler(db, _passwordService);
+        var registerHandler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService());
         var username = $"lok_{Guid.NewGuid().ToString("N")[..8]}";
         var clientIp = $"10.{Random.Shared.Next(1, 255)}.{Random.Shared.Next(1, 255)}.{Random.Shared.Next(1, 255)}";
 
