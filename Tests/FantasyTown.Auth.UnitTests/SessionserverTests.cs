@@ -186,6 +186,7 @@ public class JoinHandlerTests : IDisposable
     private readonly AuthDbContext _db;
     private readonly InMemoryTokenService _tokenService;
     private readonly InMemoryTicketService _ticketService;
+    private readonly InMemoryPermissionSnapshot _permissionSnapshot;
     private readonly JoinHandler _handler;
 
     public JoinHandlerTests()
@@ -196,13 +197,21 @@ public class JoinHandlerTests : IDisposable
         _db = new AuthDbContext(options);
         _tokenService = new InMemoryTokenService();
         _ticketService = new InMemoryTicketService();
-        _handler = new JoinHandler(_tokenService, _ticketService);
+        _permissionSnapshot = new InMemoryPermissionSnapshot();
+        _handler = new JoinHandler(_tokenService, _ticketService, _permissionSnapshot);
     }
 
     public void Dispose() => _db.Dispose();
 
     private async Task<(string token, string profileId)> IssueToken(int uid = 1, string profileId = "abc123")
     {
+        // H6/C3：正常路径需有未封禁账户快照（null 快照按封禁等效拒绝）
+        await _permissionSnapshot.SetAsync(uid, new PermissionSnapshot
+        {
+            Permission = UserPermission.NormalPlayer,
+            IsBanned = false,
+            CreatedAt = DateTime.UtcNow
+        });
         var token = await _tokenService.IssueAsync(uid, "test@test.com", "client-token", profileId, 0);
         return (token.AccessToken, profileId);
     }
@@ -271,6 +280,38 @@ public class JoinHandlerTests : IDisposable
 
         Assert.Equal(profileId, await _ticketService.ConsumeAsync("server-1"));
         Assert.Equal(profileId, await _ticketService.ConsumeAsync("server-2"));
+    }
+
+    [Fact]
+    public async Task HandleAsync_BannedAccount_ReturnsInvalidAndCreatesNoTicket()
+    {
+        // H6 回归：被封禁账户不得签发 join 票据
+        var (token, profileId) = await IssueToken();
+        await _permissionSnapshot.SetAsync(1, new PermissionSnapshot
+        {
+            Permission = UserPermission.NormalPlayer,
+            IsBanned = true,
+            BannedUntil = DateTime.UtcNow.AddHours(1),
+            CreatedAt = DateTime.UtcNow
+        });
+
+        var result = await _handler.HandleAsync(token, profileId, "server-banned");
+
+        Assert.False(result.IsValid);
+        Assert.Null(await _ticketService.ConsumeAsync("server-banned"));
+    }
+
+    [Fact]
+    public async Task HandleAsync_NullSnapshot_ReturnsInvalidAndCreatesNoTicket()
+    {
+        // C3 回归：null 快照 = 封禁等效哨兵，不得按"无权限记录 = 允许"放行
+        var (token, profileId) = await IssueToken();
+        await _permissionSnapshot.RemoveAsync(1);
+
+        var result = await _handler.HandleAsync(token, profileId, "server-nosnap");
+
+        Assert.False(result.IsValid);
+        Assert.Null(await _ticketService.ConsumeAsync("server-nosnap"));
     }
 }
 
