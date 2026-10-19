@@ -26,9 +26,15 @@ public sealed record RequestPasswordResetResult
     /// </summary>
     public string? ErrorMessage { get; init; }
     
-    public static RequestPasswordResetResult Success() => new()
+    /// <summary>
+    /// 重置令牌（仅成功且邮箱存在时下发，随邮件链接传递）
+    /// </summary>
+    public string? ResetToken { get; init; }
+    
+    public static RequestPasswordResetResult Success(string? resetToken = null) => new()
     {
-        IsSuccess = true
+        IsSuccess = true,
+        ResetToken = resetToken
     };
     
     public static RequestPasswordResetResult Failure(string error) => new()

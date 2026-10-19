@@ -28,6 +28,7 @@ public sealed class RedisTokenService : ITokenService
         var token = new TokenRecord
         {
             OwnerUid = uid,
+            Email = email,
             ClientToken = clientToken,
             AccessToken = accessToken,
             ProfileId = profileId,
@@ -75,14 +76,11 @@ public sealed class RedisTokenService : ITokenService
             !string.Equals(oldToken.ClientToken, clientToken, StringComparison.OrdinalIgnoreCase))
             return null;
 
-        // 3. 原子签发新令牌（Lua 会自动删除旧令牌）
-        // 需要获取 email，从 ID:{email} 键的值反推
-        // 实际上我们从 token 记录中没有 email，需要额外传入
-        // 这里用简单方式：直接签发新令牌，旧令牌由调用方处理
         var newAccessToken = Guid.NewGuid().ToString("N");
         var newToken = new TokenRecord
         {
             OwnerUid = oldToken.OwnerUid,
+            Email = oldToken.Email,
             ClientToken = clientToken ?? oldToken.ClientToken,
             AccessToken = newAccessToken,
             ProfileId = newProfileId ?? oldToken.ProfileId,
@@ -93,14 +91,26 @@ public sealed class RedisTokenService : ITokenService
         var tokenJson = JsonSerializer.Serialize(newToken);
         var ttlSeconds = (int)_expire2.TotalSeconds;
 
-        // 删除旧令牌
-        await db.KeyDeleteAsync($"TOKEN:{accessToken}");
-
-        // 签发新令牌
-        await db.StringSetAsync($"TOKEN:{newAccessToken}", tokenJson, _expire2);
-
-        // 注意：ID:{email} 链需要调用方维护（因为 TokenRecord 不存储 email）
-        // 在 refresh 场景中，通常由 authenticate 层处理 ID 链
+        // 3. 原子换发：删旧令牌 + 重挂 ID:{email} 反向链（V5 §5.4 Lua 规格 / 审计 C4）
+        if (!string.IsNullOrEmpty(oldToken.Email))
+        {
+            await db.ScriptEvaluateAsync(TokenLuaScripts.Refresh, new
+            {
+                idKey = (RedisKey)$"ID:{oldToken.Email}",
+                tokenPrefix = (RedisKey)"TOKEN:",
+                oldAccessToken = (RedisValue)accessToken,
+                accessToken = (RedisValue)newAccessToken,
+                tokenKey = (RedisKey)$"TOKEN:{newAccessToken}",
+                tokenJson = (RedisValue)tokenJson,
+                ttl = (RedisValue)ttlSeconds
+            });
+        }
+        else
+        {
+            // 旧令牌无 email（升级前存量数据）：仅换发，不维护反向链
+            await db.KeyDeleteAsync($"TOKEN:{accessToken}");
+            await db.StringSetAsync($"TOKEN:{newAccessToken}", tokenJson, _expire2);
+        }
 
         return newToken;
     }

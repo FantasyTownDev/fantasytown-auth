@@ -13,11 +13,13 @@ public sealed class RegisterUserHandler
 {
     private readonly AuthDbContext _db;
     private readonly IPasswordService _passwordService;
+    private readonly IRegistrationQuotaService _registrationQuota;
 
-    public RegisterUserHandler(AuthDbContext db, IPasswordService passwordService)
+    public RegisterUserHandler(AuthDbContext db, IPasswordService passwordService, IRegistrationQuotaService registrationQuota)
     {
         _db = db;
         _passwordService = passwordService;
+        _registrationQuota = registrationQuota;
     }
 
     /// <summary>
@@ -43,17 +45,23 @@ public sealed class RegisterUserHandler
             return RegisterUserResult.Failure("邮箱格式无效");
         }
 
-        // 4. 哈希密码
+        // 4. 注册配额粗检（REG_IP:{ip} 只读 GET；失败请求不消耗配额，V5 §4.1 软配额）
+        if (!await _registrationQuota.CanRegisterAsync(command.ClientIp, cancellationToken))
+        {
+            return RegisterUserResult.Failure("该 IP 注册过于频繁，请稍后再试");
+        }
+
+        // 5. 哈希密码
         var passwordHash = _passwordService.HashPassword(command.Password);
 
-        // 5. 生成玩家 UUID
+        // 6. 生成玩家 UUID
         var playerUuid = Guid.NewGuid().ToString("N").ToUpperInvariant();
 
-        // 6. 检查是否为种子邮箱（首次注册时提权为服主）
+        // 7. 检查是否为种子邮箱（首次注册时提权为服主）
         var isFirstUser = !await _db.Users.AnyAsync(cancellationToken);
         var isSeedEmail = IsSeedEmail(command.Email);
 
-        // 7. 创建用户
+        // 8. 创建用户与玩家（导航属性关联；EF 按外键依赖拓扑排序，先 User 后 Player）
         var user = new User
         {
             Email = command.Email ?? string.Empty,
@@ -67,28 +75,24 @@ public sealed class RegisterUserHandler
             RegisterAt = DateTime.UtcNow
         };
 
+        var player = new Player
+        {
+            Name = command.Username,
+            Uuid = playerUuid,
+            IsBanned = false,
+            LastModified = DateTime.UtcNow
+        };
+
+        user.Player = player;
         _db.Users.Add(user);
 
         try
         {
-            // 8. 先保存 User 获取生成的 Uid
+            // 9. 单次保存：User+Player 同一事务原子落库（审计 M4/T3-013，杜绝孤儿 User 占用邮箱）
             await _db.SaveChangesAsync(cancellationToken);
 
-            // 9. 创建玩家记录（使用已生成的 Uid）
-            var player = new Player
-            {
-                Uid = user.Uid,
-                Name = command.Username,
-                Uuid = playerUuid,
-                IsBanned = false,
-                LastModified = DateTime.UtcNow
-            };
-
-            _db.Players.Add(player);
-            await _db.SaveChangesAsync(cancellationToken);
-
-            // 10. 增加注册 IP 的注册次数（Redis）
-            // TODO: 实现 Redis INCR REG_IP:{clientIp}
+            // 10. 注册成功后计数（REG_IP:{ip}，仅成功消耗配额；超发告警由配额服务写入）
+            await _registrationQuota.RecordRegistrationAsync(command.ClientIp, cancellationToken);
 
             return RegisterUserResult.Success(user.Uid, command.Username, Guid.Parse(playerUuid));
         }

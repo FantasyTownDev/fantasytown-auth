@@ -198,6 +198,14 @@ public class AuthenticateHandlerConcurrencyTests : IDisposable
         };
         _db.Players.Add(player);
         await _db.SaveChangesAsync();
+
+        // C3：播种账户权限快照（null 快照将按封禁等效拒绝）
+        await _permissionSnapshot.SetAsync(user.Uid, new FantasyTown.Auth.Modules.Accounts.Infrastructure.PermissionSnapshot
+        {
+            Permission = FantasyTown.Auth.Modules.Accounts.Domain.UserPermission.NormalPlayer,
+            IsBanned = false,
+            CreatedAt = DateTime.UtcNow
+        });
     }
 
     [Fact]

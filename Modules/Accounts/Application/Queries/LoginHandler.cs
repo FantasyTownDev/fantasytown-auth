@@ -14,7 +14,6 @@ public sealed class LoginHandler
     private readonly IPasswordService _passwordService;
     private readonly IPermissionSnapshot _permissionSnapshot;
     private readonly ILockoutService _lockoutService;
-    private const int MaxFailedAttempts = 5;
 
     public LoginHandler(
         AuthDbContext db,
@@ -35,14 +34,7 @@ public sealed class LoginHandler
     {
         var nowUtc = DateTime.UtcNow;
 
-        // 1. 检查 IP 锁定
-        if (await _lockoutService.IsLockedOutAsync($"IP:{query.ClientIp}", cancellationToken))
-        {
-            var remaining = await _lockoutService.GetRemainingLockoutSecondsAsync($"IP:{query.ClientIp}", cancellationToken);
-            return LoginResult.Locked(remaining ?? 0);
-        }
-
-        // 2. 查找用户（支持邮箱或玩家名登录）
+        // 1. 查找用户（支持邮箱或玩家名登录）
         var user = await _db.Users
             .FirstOrDefaultAsync(u => u.Email == query.Username, cancellationToken);
 
@@ -55,19 +47,20 @@ public sealed class LoginHandler
 
         if (user == null)
         {
-            // 用户不存在，记录失败并执行等耗时操作防枚举
-            await _lockoutService.RecordFailureAsync($"IP:{query.ClientIp}", cancellationToken);
+            // 未知账户：仅记 FAIL_ACCT 审计维度（V5 §6.6，不触发锁定），等耗时操作防枚举
+            await _lockoutService.RecordUnknownAccountFailureAsync(query.Username, cancellationToken);
             await _passwordService.VerifyPasswordAsync(query.Password, string.Empty, cancellationToken);
             return LoginResult.Failure("用户名或密码错误");
         }
 
-        // 3. 检查是否被软删除
+        // 2. 检查是否被软删除
+        // 防枚举（审计 H2）：与未知账号统一报错话术，差异仅留审计（IAuditChannel P4 接入）
         if (user.IsDeleted)
         {
-            return LoginResult.Failure("账户不存在");
+            return LoginResult.Failure("用户名或密码错误");
         }
 
-        // 4. 检查是否被封禁（时间谓词）
+        // 3. 检查是否被封禁（时间谓词）
         var banEffective = BanRules.IsBanEffective(user.IsBanned, user.BannedUntil, nowUtc);
         if (banEffective)
         {
@@ -78,30 +71,28 @@ public sealed class LoginHandler
             return LoginResult.Banned(remainingSeconds, user.BannedReason);
         }
 
-        // 5. 检查用户级锁定
-        if (await _lockoutService.IsLockedOutAsync($"USER:{user.Uid}", cancellationToken))
+        // 4. LOCKOUT 检查（LOCKOUT:{uid}，Web 与 Ygg authenticate 共享键空间）
+        if (await _lockoutService.IsLockedOutAsync(user.Uid, cancellationToken))
         {
-            var remaining = await _lockoutService.GetRemainingLockoutSecondsAsync($"USER:{user.Uid}", cancellationToken);
+            var remaining = await _lockoutService.GetRemainingLockoutSecondsAsync(user.Uid, cancellationToken);
             return LoginResult.Locked(remaining ?? 0);
         }
 
-        // 6. 验证密码
+        // 5. 验证密码
         var passwordValid = await _passwordService.VerifyPasswordAsync(query.Password, user.Password, cancellationToken);
 
         if (!passwordValid)
         {
-            // 密码错误，记录失败
-            var failureCount = await _lockoutService.RecordFailureAsync($"IP:{query.ClientIp}", cancellationToken);
-            await _lockoutService.RecordFailureAsync($"USER:{user.Uid}", cancellationToken);
+            // 记录失败：FAIL_EP:{email}:{ip}（同 IP 窗口 ≥5 触发 LOCKOUT）+ FAIL_ACCT:{email}（审计）
+            await _lockoutService.RecordFailureAsync(user.Uid, user.Email, query.ClientIp, cancellationToken);
 
             return LoginResult.Failure("用户名或密码错误");
         }
 
-        // 7. 密码正确，重置失败计数
-        await _lockoutService.ResetAsync($"IP:{query.ClientIp}", cancellationToken);
-        await _lockoutService.ResetAsync($"USER:{user.Uid}", cancellationToken);
+        // 6. 密码正确，清除 LOCKOUT:{uid} 与 FAIL_EP:{email}:{ip}
+        await _lockoutService.ResetAsync(user.Uid, user.Email, query.ClientIp, cancellationToken);
 
-        // 8. 更新权限快照
+        // 7. 更新权限快照
         await _permissionSnapshot.SetAsync(user.Uid, new PermissionSnapshot
         {
             Permission = user.Permission,
@@ -109,7 +100,7 @@ public sealed class LoginHandler
             CreatedAt = nowUtc
         }, cancellationToken);
 
-        // 9. 如果之前被封禁但已过期，清除封禁状态
+        // 8. 如果之前被封禁但已过期，清除封禁状态
         if (user.IsBanned && user.BannedUntil.HasValue && user.BannedUntil.Value <= nowUtc)
         {
             user.IsBanned = false;

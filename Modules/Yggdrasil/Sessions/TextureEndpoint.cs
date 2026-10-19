@@ -1,3 +1,4 @@
+using FantasyTown.Auth.Modules.Shared;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 
@@ -15,7 +16,8 @@ public static class TextureEndpoint
         {
             var uuid = context.Request.RouteValues["uuid"]?.ToString();
             var logger = context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("TextureEndpoint");
-            logger.LogDebug("[TEXTURE] Request: {Uuid} from {Ip}", uuid, context.Connection.RemoteIpAddress);
+            logger.LogDebug("[TEXTURE] Request: {Uuid} from {Ip}", uuid,
+                context.RequestServices.GetRequiredService<IClientIp>().GetClientIp());
 
             if (string.IsNullOrEmpty(uuid))
             {

@@ -1,6 +1,7 @@
 using FantasyTown.Auth.Modules.Accounts.Application.Commands;
 using FantasyTown.Auth.Modules.Accounts.Infrastructure;
 using FantasyTown.Auth.Persistence;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
@@ -10,11 +11,13 @@ public class ResetPasswordModel : PageModel
 {
     private readonly AuthDbContext _db;
     private readonly IPasswordService _passwordService;
+    private readonly IDataProtectionProvider _dataProtectionProvider;
 
-    public ResetPasswordModel(AuthDbContext db, IPasswordService passwordService)
+    public ResetPasswordModel(AuthDbContext db, IPasswordService passwordService, IDataProtectionProvider dataProtectionProvider)
     {
         _db = db;
         _passwordService = passwordService;
+        _dataProtectionProvider = dataProtectionProvider;
     }
 
     [BindProperty]
@@ -51,7 +54,7 @@ public class ResetPasswordModel : PageModel
             return Page();
         }
 
-        var handler = new PasswordResetHandler(_db, _passwordService);
+        var handler = new PasswordResetHandler(_db, _passwordService, _dataProtectionProvider);
         var command = new ResetPasswordCommand
         {
             Token = Input.Token,

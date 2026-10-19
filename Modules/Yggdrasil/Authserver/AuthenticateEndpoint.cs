@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using FantasyTown.Auth.Modules.Shared;
 using FantasyTown.Auth.Modules.Yggdrasil.Protocol;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -49,8 +50,8 @@ public static class AuthenticateEndpoint
                 return;
             }
 
-            // 3. 获取客户端 IP
-            var clientIp = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            // 3. 获取客户端 IP（受信代理解析，见 V5 §8）
+            var clientIp = context.RequestServices.GetRequiredService<IClientIp>().GetClientIp() ?? "unknown";
 
             // 4. IP 限流检查
             var ipLimiter = context.RequestServices.GetRequiredService<IRateLimiter>();

@@ -1,6 +1,7 @@
 using FantasyTown.Auth.Middleware;
 using FantasyTown.Auth.Modules.Accounts.Application.Queries;
 using FantasyTown.Auth.Modules.Accounts.Infrastructure;
+using FantasyTown.Auth.Modules.Shared;
 using FantasyTown.Auth.Persistence;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -12,15 +13,18 @@ public class LoginModel : PageModel
     private readonly AuthDbContext _db;
     private readonly IPasswordService _passwordService;
     private readonly IPermissionSnapshot _permissionSnapshot;
+    private readonly IClientIp _clientIp;
 
     public LoginModel(
         AuthDbContext db,
         IPasswordService passwordService,
-        IPermissionSnapshot permissionSnapshot)
+        IPermissionSnapshot permissionSnapshot,
+        IClientIp clientIp)
     {
         _db = db;
         _passwordService = passwordService;
         _permissionSnapshot = permissionSnapshot;
+        _clientIp = clientIp;
     }
 
     [BindProperty]
@@ -49,7 +53,7 @@ public class LoginModel : PageModel
             return Page();
         }
 
-        var clientIp = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        var clientIp = _clientIp.GetClientIp() ?? "unknown";
 
         var handler = new LoginHandler(_db, _passwordService, _permissionSnapshot);
         var query = new LoginQuery

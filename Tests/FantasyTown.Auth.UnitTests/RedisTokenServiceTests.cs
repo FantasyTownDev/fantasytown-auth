@@ -110,6 +110,25 @@ public class RedisTokenServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task RevokeAllAsync_ShouldRevokeRefreshedToken()
+    {
+        // C4 回归：refresh 必须重挂 ID:{email} 反向链，
+        // 否则 signout（RevokeAll）按陈旧链吊销时漏掉换发后的令牌
+        var original = await _tokenService.IssueAsync(1, "test@test.com", "c1", null, 0);
+        var refreshed = await _tokenService.RefreshAsync(original.AccessToken, "c1", null);
+        Assert.NotNull(refreshed);
+
+        // ID 链已重挂指向新令牌
+        var idKey = _db.StringGet("ID:test@test.com");
+        Assert.Equal(refreshed!.AccessToken, idKey.ToString());
+
+        await _tokenService.RevokeAllAsync("test@test.com");
+
+        var afterRevoke = await _tokenService.ValidateAsync(refreshed.AccessToken);
+        Assert.Null(afterRevoke);
+    }
+
+    [Fact]
     public async Task RevokeByTokenAsync_ShouldRemoveSpecificToken()
     {
         var record = await _tokenService.IssueAsync(1, "test@test.com", "c1", null, 0);

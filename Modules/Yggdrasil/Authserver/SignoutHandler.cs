@@ -29,13 +29,13 @@ public sealed class SignoutHandler
 
         if (user == null)
         {
-            // 用户不存在，执行等耗时操作防枚举
-            _passwordService.VerifyPassword(password, string.Empty);
+            // 用户不存在，VerifyPasswordAsync 内部对空哈希走 dummy Argon2 + 等耗时，防枚举（T3-009）
+            await _passwordService.VerifyPasswordAsync(password, string.Empty, cancellationToken);
             return SignoutResult.Invalid();
         }
 
-        // 2. 验证密码
-        var passwordValid = _passwordService.VerifyPassword(password, user.Password);
+        // 2. 验证密码（异步路径，与登录侧等耗时）
+        var passwordValid = await _passwordService.VerifyPasswordAsync(password, user.Password, cancellationToken);
         if (!passwordValid)
         {
             return SignoutResult.Invalid();

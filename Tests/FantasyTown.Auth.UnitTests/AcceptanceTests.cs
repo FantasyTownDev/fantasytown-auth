@@ -33,7 +33,7 @@ public class AcceptanceTests
     public async Task ConcurrentRegistration_SameUsername_LogicallyOnlyOneSucceeds()
     {
         using var db = CreateInMemoryDbContext();
-        var handler = new RegisterUserHandler(db, _passwordService);
+        var handler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService());
         var username = "concurrent_user";
         var tasks = new List<Task<RegisterUserResult>>();
 
@@ -90,7 +90,7 @@ public class AcceptanceTests
     public async Task BannedUser_LoginRejected()
     {
         using var db = CreateInMemoryDbContext();
-        var registerHandler = new RegisterUserHandler(db, _passwordService);
+        var registerHandler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService());
 
         // 注册用户
         var registerResult = await registerHandler.HandleAsync(new RegisterUserCommand
@@ -134,7 +134,7 @@ public class AcceptanceTests
     public async Task SoftDeletedUser_LoginRejected()
     {
         using var db = CreateInMemoryDbContext();
-        var registerHandler = new RegisterUserHandler(db, _passwordService);
+        var registerHandler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService());
 
         // 注册用户
         var registerResult = await registerHandler.HandleAsync(new RegisterUserCommand
@@ -171,7 +171,7 @@ public class AcceptanceTests
     public async Task SeedEmail_FirstRegistration_GetsOwnerPermission()
     {
         using var db = CreateInMemoryDbContext();
-        var handler = new RegisterUserHandler(db, _passwordService);
+        var handler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService());
 
         // 模拟种子邮箱（第一次注册）
         var seedEmail = "owner@fantasytown.com";
@@ -197,7 +197,7 @@ public class AcceptanceTests
     public async Task SeedEmail_SecondRegistration_DoesNotGetOwnerPermission()
     {
         using var db = CreateInMemoryDbContext();
-        var handler = new RegisterUserHandler(db, _passwordService);
+        var handler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService());
 
         // 第一次注册（种子邮箱）
         await handler.HandleAsync(new RegisterUserCommand

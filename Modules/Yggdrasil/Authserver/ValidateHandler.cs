@@ -43,15 +43,11 @@ public sealed class ValidateHandler
             return ValidateResult.Invalid();
         }
 
-        // 4. 检查封禁状态
+        // 4. 检查封禁状态（null 快照按封禁等效哨兵拒绝，C3 / V5 N2）
         var snapshot = await _permissionSnapshot.GetAsync(token.OwnerUid, cancellationToken);
-        if (snapshot != null)
+        if (snapshot == null || BanRules.IsBanEffective(snapshot.IsBanned, snapshot.BannedUntil, DateTime.UtcNow))
         {
-            var isBanned = BanRules.IsBanEffective(snapshot.IsBanned, snapshot.BannedUntil, DateTime.UtcNow);
-            if (isBanned)
-            {
-                return ValidateResult.Invalid();
-            }
+            return ValidateResult.Invalid();
         }
 
         return ValidateResult.Valid();

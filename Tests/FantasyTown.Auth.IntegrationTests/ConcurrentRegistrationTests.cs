@@ -15,14 +15,12 @@ namespace FantasyTown.Auth.IntegrationTests;
 [Trait("Category", "Integration")]
 public class ConcurrentRegistrationTests : IAsyncLifetime
 {
-    private bool _useTestcontainers;
     private string _connectionString = null!;
 
     public async Task InitializeAsync()
     {
         if (DockerHelper.IsAvailable())
         {
-            _useTestcontainers = true;
             var container = new Testcontainers.MySql.MySqlBuilder()
                 .WithDatabase("fantasytown_test")
                 .WithUsername("test")
@@ -33,7 +31,6 @@ public class ConcurrentRegistrationTests : IAsyncLifetime
         }
         else
         {
-            _useTestcontainers = false;
             _connectionString = TestDbContextFactory.GetConnectionString();
         }
 
@@ -58,6 +55,10 @@ public class ConcurrentRegistrationTests : IAsyncLifetime
     public async Task ConcurrentRegistration_ShouldAllowExactlyOneSuccess()
     {
         const int concurrentCount = 50;
+        // 每次运行唯一邮箱/角色名：避免跨运行残留 / 跨测试类并行冲突（CI 与本地持久库通用）
+        var rid = Guid.NewGuid().ToString("N")[..8];
+        var runEmail = $"loadtest-{rid}@example.com";
+        var runName = $"LoadPlyr{rid}";
         var results = new ConcurrentBag<RegisterUserResult>();
         var tasks = new List<Task>();
 
@@ -66,11 +67,11 @@ public class ConcurrentRegistrationTests : IAsyncLifetime
             tasks.Add(Task.Run(async () =>
             {
                 using var context = CreateContext();
-                var handler = new RegisterUserHandler(context, new FakePasswordService());
+                var handler = new RegisterUserHandler(context, new FakePasswordService(), new InMemoryRegistrationQuotaService());
                 var command = new RegisterUserCommand
                 {
-                    Email = "test@example.com",
-                    Username = "TestPlayer",
+                    Email = runEmail,
+                    Username = runName,
                     Password = "Password123!",
                     ClientIp = "127.0.0.1"
                 };
@@ -94,6 +95,8 @@ public class ConcurrentRegistrationTests : IAsyncLifetime
     public async Task ConcurrentRegistration_DifferentEmails_ShouldAllSucceed()
     {
         const int concurrentCount = 10;
+        // 每次运行唯一前缀：邮箱与角色名均不与历史残留/其他测试类冲突
+        var rid = Guid.NewGuid().ToString("N")[..8];
         var results = new ConcurrentBag<RegisterUserResult>();
         var tasks = new List<Task>();
 
@@ -103,11 +106,11 @@ public class ConcurrentRegistrationTests : IAsyncLifetime
             tasks.Add(Task.Run(async () =>
             {
                 using var context = CreateContext();
-                var handler = new RegisterUserHandler(context, new FakePasswordService());
+                var handler = new RegisterUserHandler(context, new FakePasswordService(), new InMemoryRegistrationQuotaService());
                 var command = new RegisterUserCommand
                 {
-                    Email = $"user{index}@example.com",
-                    Username = $"Player{index}",
+                    Email = $"user{index}-{rid}@example.com",
+                    Username = $"Player{index}_{rid}",
                     Password = "Password123!",
                     ClientIp = "127.0.0.1"
                 };
@@ -121,6 +124,92 @@ public class ConcurrentRegistrationTests : IAsyncLifetime
 
         var successCount = results.Count(r => r.IsSuccess);
         Assert.Equal(concurrentCount, successCount);
+    }
+
+    /// <summary>
+    /// M5/§4.1：唯一约束失败的注册请求不消耗 REG_IP 配额（防 NAT 出口 IP 配额 DoS）——
+    /// 配额 3 = 成功 A + C + D；若失败的 B 计数，D 将被粗检拒绝
+    /// </summary>
+    [Fact]
+    public async Task FailedRegistration_ShouldNotConsumeIpQuota()
+    {
+        const string ip = "172.16.0.50";
+        var quota = new InMemoryRegistrationQuotaService(limit: 3);
+
+        async Task<RegisterUserResult> RegisterAsync(string username, string email)
+        {
+            using var context = CreateContext();
+            var handler = new RegisterUserHandler(context, new FakePasswordService(), quota);
+            return await handler.HandleAsync(new RegisterUserCommand
+            {
+                Username = username,
+                Email = email,
+                Password = "Password123!",
+                ClientIp = ip
+            });
+        }
+
+        var unique = Guid.NewGuid().ToString("N")[..8];
+
+        var a = await RegisterAsync($"qok_{unique}", $"qok_{unique}@example.com");
+        Assert.True(a.IsSuccess);
+
+        // 同邮箱冲突 → 落库失败（1062），必须发生在粗检之后、计数之前
+        var b = await RegisterAsync($"qdup_{unique}", $"qok_{unique}@example.com");
+        Assert.False(b.IsSuccess);
+        Assert.Equal("邮箱已被注册", b.ErrorMessage);
+
+        var c = await RegisterAsync($"qc_{unique}", $"qc_{unique}@example.com");
+        Assert.True(c.IsSuccess);
+
+        // 关键断言：B 未占用配额，第 3 个成功注册仍被放行
+        var d = await RegisterAsync($"qd_{unique}", $"qd_{unique}@example.com");
+        Assert.True(d.IsSuccess);
+    }
+
+    /// <summary>
+    /// M4/T3-013：User+Player 单次保存原子落库——用户名唯一约束冲突时
+    /// 不得留下孤儿 User（否则邮箱被无主占用、不可自愈）
+    /// </summary>
+    [Fact]
+    public async Task FailedRegistration_DuplicateUsername_ShouldNotLeaveOrphanUser()
+    {
+        var unique = Guid.NewGuid().ToString("N")[..8];
+        var conflictEmail = $"orphan_{unique}@example.com";
+
+        using (var seedContext = CreateContext())
+        {
+            var seedHandler = new RegisterUserHandler(seedContext, new FakePasswordService(), new InMemoryRegistrationQuotaService());
+            var seed = await seedHandler.HandleAsync(new RegisterUserCommand
+            {
+                Username = $"dup_{unique}",
+                Email = $"dup_{unique}@example.com",
+                Password = "Password123!",
+                ClientIp = "127.0.0.1"
+            });
+            Assert.True(seed.IsSuccess);
+        }
+
+        // 同名不同邮箱 → 1062：User+Player 必须同一事务整体回滚
+        using (var conflictContext = CreateContext())
+        {
+            var handler = new RegisterUserHandler(conflictContext, new FakePasswordService(), new InMemoryRegistrationQuotaService());
+            var result = await handler.HandleAsync(new RegisterUserCommand
+            {
+                Username = $"dup_{unique}",
+                Email = conflictEmail,
+                Password = "Password123!",
+                ClientIp = "127.0.0.1"
+            });
+            Assert.False(result.IsSuccess);
+            Assert.Equal("用户名已被占用", result.ErrorMessage);
+        }
+
+        using (var verifyContext = CreateContext())
+        {
+            var orphanExists = await verifyContext.Users.AnyAsync(u => u.Email == conflictEmail);
+            Assert.False(orphanExists, "用户名冲突后不得留下孤儿 User（邮箱被无主占用）");
+        }
     }
 }
 

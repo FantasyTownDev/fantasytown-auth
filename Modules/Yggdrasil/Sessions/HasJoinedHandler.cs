@@ -57,15 +57,10 @@ public sealed class HasJoinedHandler
             await _playerCache.SetAsync(uuid, snapshot, cancellationToken);
         }
 
-        // 3. 检查封禁状态
-        if (snapshot.IsBanned)
+        // 3. 检查封禁状态（复用冻结时间谓词 BanRules.IsBanEffective，T3-016）
+        if (BanRules.IsBanEffective(snapshot.IsBanned, snapshot.BannedUntil, DateTime.UtcNow))
         {
-            var now = DateTime.UtcNow;
-            var isEffectivelyBanned = snapshot.BannedUntil == null || snapshot.BannedUntil > now;
-            if (isEffectivelyBanned)
-            {
-                return HasJoinedResult.NotFound();
-            }
+            return HasJoinedResult.NotFound();
         }
 
         // 4. 生成签名 profile

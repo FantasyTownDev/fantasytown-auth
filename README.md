@@ -37,7 +37,7 @@ Minecraft 第三方验证登录系统最小化内核，基于 .NET 10 构建。
 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
 - MariaDB 10.5+（推荐 11.x LTS，12.x 兼容但未经 Pomelo 官方测试）
-- Redis 7+（推荐）或 Memurai（Windows 开发环境可选）
+- Redis 7+（必需）；Windows 开发环境可用 Memurai 替代
 
 ### 配置
 
@@ -52,6 +52,9 @@ Minecraft 第三方验证登录系统最小化内核，基于 .NET 10 构建。
     "Connection": "localhost:6379",
     "Password": ""
   },
+  "Site": {
+    "Url": "http://example.com:5000"
+  },
   "Yggdrasil": {
     "SkinBaseUrl": "http://example.com:5000",
     "SkinDomains": ["example.com"]
@@ -60,6 +63,8 @@ Minecraft 第三方验证登录系统最小化内核，基于 .NET 10 构建。
 ```
 
 > **SkinBaseUrl 格式**：`http://example.com:5000`、`http://example.com`、`https://example.com`、`https://example.com:5000` 均可。Minecraft 客户端会校验纹理 URL 域名是否在 `SkinDomains` 白名单中。
+
+> **凭据存放**：生产环境凭据写入 `appsettings.json` 并以 `chmod 600` 收紧文件权限，详见[生产部署](#生产部署)；后续版本计划提供本地非对称可逆加密的凭据配置方案（高安全性存储、兼容平滑更新）。
 
 ### 运行应用
 
@@ -74,6 +79,58 @@ dotnet run
 ```bash
 curl http://localhost:5000/health
 ```
+
+## 生产部署
+
+### 发布
+
+```bash
+dotnet publish FantasyTown.Auth.csproj -c Release -r linux-x64 --self-contained false -o ./publish
+```
+
+`--self-contained false` 为框架依赖发布，服务器需安装 [.NET 运行时 10](https://dotnet.microsoft.com/download/dotnet/10.0)；服务器不便安装运行时时改用 `--self-contained true`（自包含发布，产物更大、免装运行时）。
+
+### 前置依赖（均为必需）
+
+| 依赖 | 说明 |
+|---|---|
+| MariaDB 10.5+（或 MySQL 8.0+） | 建空库并授权即可，**应用启动时自动执行 EF 迁移建表**；启动瞬间数据库必须可达（fail-fast，DB 未就绪则进程退出并给出明确错误） |
+| Redis 7+ | **必需**：启动即连接；令牌 / 票据 / 限流计数 / 锁定 / DataProtection 密钥环全部托管其上 |
+
+### 配置
+
+当前版本凭据直接写入 `appsettings.json`，上线前收紧文件权限：
+
+```bash
+chmod 600 appsettings.json
+```
+
+必需配置项：
+
+| 键 | 说明 |
+|---|---|
+| `ConnectionStrings:DefaultConnection` | 数据库连接串（留空启动即失败） |
+| `Redis:Connection` | Redis 地址，如 `localhost:6379` |
+| `Redis:Password` | Redis 密码；Redis 未设密码则留空（启动时会输出安全警告日志） |
+| `Site:Url` | 对外访问地址（密码重置链接等绝对 URL 以此为基址） |
+| `Kestrel:Endpoints:Http:Url` | 监听地址，默认 `http://0.0.0.0:5000` |
+
+Linux 下 MariaDB 仅开放 unix socket 时，连接串写法（MySqlConnector 2.4.0）：
+
+```
+Server=/run/mariadb/mariadb.sock;Database=fantasytown_auth;User ID=your_user;ConnectionProtocol=UnixSocket;
+```
+
+socket 路径写入 `Server`，并显式声明 `ConnectionProtocol=UnixSocket`（该版本不支持 `Unix Socket=` 键）。容器 / 多机场景亦可用环境变量覆盖任意配置键（如 `ConnectionStrings__DefaultConnection`）。
+
+### 启动与验证
+
+```bash
+dotnet FantasyTown.Auth.dll
+curl -f http://localhost:5000/health   # 返回 200 即就绪
+```
+
+使用 systemd 时建议声明 `After=mariadb.service redis-server.service`（或发行版等价单元），确保应用启动时数据库已可达。
 
 ## 项目结构
 
@@ -90,7 +147,8 @@ FantasyTown.Auth/
 │   │   ├── Sessions/               # join/hasJoined/profile + TicketService + 签名
 │   │   └── Protocol/               # 冻结 DTO + JsonSourceGeneration
 │   └── Shared/                     # 共享：Result, IClock, IClientIp, IAuditChannel
-├── Persistence/                    # EF Core DbContext, 迁移
+├── Persistence/                    # EF Core DbContext
+├── Migrations/                     # EF Core 初始迁移（六表 InitialCreate）
 ├── Middleware/                     # RejectBannedUser 中间件
 └── Pages/                          # Razor Pages：登录/注册/找回/重置
 ```
@@ -147,8 +205,15 @@ FantasyTown.Auth/
 - 用户枚举防护（统一话术 + 等耗时校验）
 - 令牌原子签发（Redis Lua 脚本）
 - 分层限流（IP 固定窗 + 账户×IP 滑动窗）
+- 注册 IP 配额（默认每 IP 3 个账户，超出拒绝）
+- 登录失败锁定（指数退避 15 / 30 / 60 分钟）
 - 封禁用户即时拦截（PERM 快照 + RejectBannedUser 中间件）
 - RSA-SHA1 纹理签名（authlib-injector 兼容）
+
+## 已知限制
+
+- **邮件通道开发中**：密码重置令牌链路已就绪，但邮件发送尚未接入——当前提交"忘记密码"表单不会发出邮件；急需重置某账户密码时，可更新数据库中的密码哈希（Argon2 PHC 格式）。邮件接入已列入 Roadmap
+- **管理后台开发中**：`/admin` 管理页面随 P4 里程碑交付；当前版本封禁 / 权限调整等需直接操作数据库
 
 ## TODO List
 
@@ -177,7 +242,7 @@ FantasyTown.Auth/
 - [x] 并发注册恰 1（单元测试覆盖）
 - [x] 权限判定（PermissionRules 四级枚举 + 白名单精确匹配）
 - [x] 封禁判定（BanRules + IsBanEffective 时间谓词）
-- [x] 单元测试 203 项全部通过
+- [x] 单元测试全部通过
 
 ### P2：Yggdrasil Authserver ✅
 
@@ -202,9 +267,17 @@ FantasyTown.Auth/
 - [x] 全服同步可见（纹理回传验证）
 - [x] hasJoined P99 < 50ms
 
-### P4：管理域
+### P3.5：前置修复 ✅
 
-- [ ] ManagementGuard 三函数（CanManage / CanClearLockout / CanExecuteAction）
+- [x] 密码重置令牌无状态化（DataProtection 限时保护，符合冻结设计 §4.5）
+- [x] 注册 IP 配额（REG_IP 快照计数）
+- [x] 配置凭据硬编码清除（连接串等默认值置空，缺失即 fail-fast）
+- [x] 并发保存原子化（注册竞态单次 SaveChanges 原子提交）
+- [x] Linux x64 生产环境实机验证（MariaDB socket + Redis）
+
+### P4：管理域（进行中）
+
+- [x] ManagementGuard 三函数（CanManage / NotSelf / CanClearLockout）
 - [ ] /admin 授权策略（moderator / owner / admin）
 - [ ] /admin 区域全域 no-cache 中间件
 - [ ] 管理管线（Antiforgery → 策略 → 越权矩阵 → 二次确认 → 领域命令 → 副作用 → 审计 → PRG）
@@ -214,7 +287,7 @@ FantasyTown.Auth/
 - [ ] /admin 用户管理页（列表 / 详情 / 封禁 / 解封 / 权限变更 / 强制重置密码 / 邮箱改绑 / 软删）
 - [ ] /admin 协管管理页（列表）
 - [ ] /admin 锁定管理页（清除锁定）
-- [ ] ManagementGuard 单测（CanManage 全组合 + CanClearLockout 自我放行锚点）
+- [x] ManagementGuard 单测（CanManage 全组合 + CanClearLockout 自我放行锚点）
 - [ ] 管理域回归测试（越权矩阵全覆盖 + 二次确认 + 审计落库）
 
 ### P5：加固压测

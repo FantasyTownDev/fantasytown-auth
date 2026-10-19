@@ -3,12 +3,12 @@ using StackExchange.Redis;
 namespace FantasyTown.Auth.Modules.Accounts.Infrastructure;
 
 /// <summary>
-/// Redis 锁定服务实现
-/// 使用 ZSET 实现滑动窗口限流
-/// 键：LOCKOUT:{identifier}
-/// 值：失败时间戳（score）
-/// TTL：15 分钟（窗口大小）
-/// 阈值：5 次失败触发锁定
+/// Redis 锁定服务实现（V5 §6.6 冻结键空间）
+/// LOCKOUT:{uid}     — 账户锁定（count=触发次数，TTL=指数退避 15→30→60min 封顶；跨通道共享）
+/// FAIL_EP:{email}:{ip} — 同 IP 复合键 ZSET 滑动窗 15min（LOCKOUT 触发依据，阈值 5）
+/// FAIL_ACCT:{email} — 账户全局 ZSET 滑动窗 15min（仅审计/告警，不触发锁定）
+/// H4：记录失败的"写入/修剪/过期/阈值判定/锁定"由单 Lua 脚本原子执行
+/// H3：仅精确键操作（无 IP 前缀清空），计数经滑动窗修剪 + 键 TTL 自然过期
 /// </summary>
 public sealed class RedisLockoutService : ILockoutService
 {
@@ -32,85 +32,113 @@ public sealed class RedisLockoutService : ILockoutService
         _database = database;
     }
 
-    public async Task<int> RecordFailureAsync(string identifier, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// 记录一次已知账户失败（审计 H4 原子化）：
+    /// 双滑动窗写入/修剪/TTL + FAIL_EP 阈值判定 + LOCKOUT 触发，单脚本执行
+    /// </summary>
+    private static readonly LuaScript RecordFailureScript = LuaScript.Prepare(@"
+redis.call('ZADD', @epKey, @now, @epMember)
+redis.call('ZREMRANGEBYSCORE', @epKey, 0, @windowStart)
+redis.call('EXPIRE', @epKey, @windowSeconds)
+redis.call('ZADD', @acctKey, @now, @acctMember)
+redis.call('ZREMRANGEBYSCORE', @acctKey, 0, @windowStart)
+redis.call('EXPIRE', @acctKey, @windowSeconds)
+local count = redis.call('ZCARD', @epKey)
+local triggered = 0
+if count >= tonumber(@maxAttempts) then
+    local n = redis.call('INCR', @lockoutKey)
+    local ttl = tonumber(@backoffBaseSeconds) * 2 ^ (n - 1)
+    if ttl > tonumber(@backoffCapSeconds) then ttl = tonumber(@backoffCapSeconds) end
+    redis.call('EXPIRE', @lockoutKey, ttl)
+    triggered = 1
+end
+return {count, triggered}
+");
+
+    /// <summary>
+    /// 记录一次未知账户失败（仅 FAIL_ACCT 审计维度，单脚本原子执行）
+    /// </summary>
+    private static readonly LuaScript RecordUnknownFailureScript = LuaScript.Prepare(@"
+redis.call('ZADD', @acctKey, @now, @member)
+redis.call('ZREMRANGEBYSCORE', @acctKey, 0, @windowStart)
+redis.call('EXPIRE', @acctKey, @windowSeconds)
+return 1
+");
+
+    public async Task<bool> IsLockedOutAsync(int uid, CancellationToken cancellationToken = default)
     {
         var db = _redis.GetDatabase(_database);
-        var key = $"LOCKOUT:{identifier}";
-        var now = DateTime.UtcNow;
-        var windowStart = now - _window;
-
-        // 添加失败记录（member 用唯一标识，score 用时间戳）
-        await db.SortedSetAddAsync(key, $"{now.Ticks}:{Guid.NewGuid():N}", now.Ticks);
-
-        // 清理过期记录
-        await db.SortedSetRemoveRangeByScoreAsync(key, 0, windowStart.Ticks);
-
-        // 设置键过期
-        await db.KeyExpireAsync(key, _window);
-
-        // 返回当前窗口内的失败次数
-        var count = await db.SortedSetLengthAsync(key);
-        return (int)count;
+        return await db.KeyExistsAsync(LockoutKey(uid));
     }
 
-    public async Task<bool> IsLockedOutAsync(string identifier, CancellationToken cancellationToken = default)
+    public async Task<double?> GetRemainingLockoutSecondsAsync(int uid, CancellationToken cancellationToken = default)
     {
         var db = _redis.GetDatabase(_database);
-        var key = $"LOCKOUT:{identifier}";
-        var now = DateTime.UtcNow;
-        var windowStart = now - _window;
-
-        // 清理过期记录
-        await db.SortedSetRemoveRangeByScoreAsync(key, 0, windowStart.Ticks);
-
-        // 检查失败次数
-        var count = await db.SortedSetLengthAsync(key);
-        return count >= _maxAttempts;
+        var ttl = await db.KeyTimeToLiveAsync(LockoutKey(uid));
+        return ttl?.TotalSeconds;
     }
 
-    public async Task<double?> GetRemainingLockoutSecondsAsync(string identifier, CancellationToken cancellationToken = default)
+    public async Task<LockoutFailureResult> RecordFailureAsync(int uid, string email, string ip, CancellationToken cancellationToken = default)
     {
         var db = _redis.GetDatabase(_database);
-        var key = $"LOCKOUT:{identifier}";
-        var now = DateTime.UtcNow;
-        var windowStart = now - _window;
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var windowStart = now - (long)_window.TotalMilliseconds;
 
-        // 清理过期记录
-        await db.SortedSetRemoveRangeByScoreAsync(key, 0, windowStart.Ticks);
+        var raw = await db.ScriptEvaluateAsync(RecordFailureScript, new
+        {
+            epKey = (RedisKey)$"FAIL_EP:{email}:{ip}",
+            acctKey = (RedisKey)$"FAIL_ACCT:{email}",
+            lockoutKey = (RedisKey)LockoutKey(uid),
+            now = (RedisValue)now,
+            windowStart = (RedisValue)windowStart,
+            epMember = (RedisValue)$"{now}:{Guid.NewGuid():N}",
+            acctMember = (RedisValue)$"{now}:{Guid.NewGuid():N}",
+            windowSeconds = (RedisValue)(long)_window.TotalSeconds,
+            maxAttempts = (RedisValue)_maxAttempts,
+            backoffBaseSeconds = (RedisValue)(long)_lockoutDuration.TotalSeconds,
+            backoffCapSeconds = (RedisValue)(long)(_lockoutDuration.TotalSeconds * 4)
+        });
+        // 脚本契约：恒返回 {count, triggered}
+        var result = (RedisResult[])raw!;
 
-        // 检查失败次数
-        var count = await db.SortedSetLengthAsync(key);
-        if (count < _maxAttempts)
-            return null;
-
-        // 获取最早的失败记录
-        var entries = await db.SortedSetRangeByScoreWithScoresAsync(key, windowStart.Ticks, now.Ticks, Exclude.None, Order.Ascending, 0, 1);
-        if (entries.Length == 0)
-            return null;
-
-        var earliestFailure = new DateTime((long)entries[0].Score, DateTimeKind.Utc);
-        var lockoutEnd = earliestFailure + _lockoutDuration;
-
-        if (lockoutEnd <= now)
-            return 0;
-
-        return (lockoutEnd - now).TotalSeconds;
+        return new LockoutFailureResult((int)result[0], (int)result[1] == 1);
     }
 
-    public async Task ResetAsync(string identifier, CancellationToken cancellationToken = default)
+    public async Task RecordUnknownAccountFailureAsync(string identifier, CancellationToken cancellationToken = default)
     {
         var db = _redis.GetDatabase(_database);
-        var key = $"LOCKOUT:{identifier}";
-        await db.KeyDeleteAsync(key);
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var windowStart = now - (long)_window.TotalMilliseconds;
+
+        // 未知账户：仅 FAIL_ACCT 审计维度，永不设置 LOCKOUT（无 uid 可锁）
+        await db.ScriptEvaluateAsync(RecordUnknownFailureScript, new
+        {
+            acctKey = (RedisKey)$"FAIL_ACCT:{identifier}",
+            now = (RedisValue)now,
+            member = (RedisValue)$"{now}:{Guid.NewGuid():N}",
+            windowStart = (RedisValue)windowStart,
+            windowSeconds = (RedisValue)(long)_window.TotalSeconds
+        });
     }
+
+    public async Task ResetAsync(int uid, string email, string ip, CancellationToken cancellationToken = default)
+    {
+        var db = _redis.GetDatabase(_database);
+        await db.KeyDeleteAsync(LockoutKey(uid));
+        await db.KeyDeleteAsync($"FAIL_EP:{email}:{ip}");
+        // FAIL_ACCT:{email} 仅审计，由滑动窗自然过期
+    }
+
+    private static string LockoutKey(int uid) => $"LOCKOUT:{uid}";
 }
 
 /// <summary>
-/// 内存锁定服务实现（用于单元测试）
+/// 内存锁定服务实现（用于单元测试，镜像 Redis 实现的 §6.6 语义）
 /// </summary>
 public sealed class InMemoryLockoutService : ILockoutService
 {
-    private readonly Dictionary<string, List<DateTime>> _failures = new();
+    private readonly Dictionary<string, List<long>> _windows = new();
+    private readonly Dictionary<int, (int Count, DateTime ExpiresAt)> _lockouts = new();
     private readonly int _maxAttempts;
     private readonly TimeSpan _window;
     private readonly TimeSpan _lockoutDuration;
@@ -125,63 +153,79 @@ public sealed class InMemoryLockoutService : ILockoutService
         _lockoutDuration = TimeSpan.FromMinutes(lockoutMinutes);
     }
 
-    public Task<int> RecordFailureAsync(string identifier, CancellationToken cancellationToken = default)
+    public Task<bool> IsLockedOutAsync(int uid, CancellationToken cancellationToken = default)
     {
-        if (!_failures.ContainsKey(identifier))
-            _failures[identifier] = new List<DateTime>();
-
-        var now = DateTime.UtcNow;
-        var windowStart = now - _window;
-
-        // 清理过期记录
-        _failures[identifier].RemoveAll(t => t < windowStart);
-
-        // 添加新记录
-        _failures[identifier].Add(now);
-
-        return Task.FromResult(_failures[identifier].Count);
+        if (_lockouts.TryGetValue(uid, out var state))
+        {
+            if (state.ExpiresAt > DateTime.UtcNow)
+                return Task.FromResult(true);
+            _lockouts.Remove(uid);
+        }
+        return Task.FromResult(false);
     }
 
-    public Task<bool> IsLockedOutAsync(string identifier, CancellationToken cancellationToken = default)
+    public Task<double?> GetRemainingLockoutSecondsAsync(int uid, CancellationToken cancellationToken = default)
     {
-        if (!_failures.ContainsKey(identifier))
-            return Task.FromResult(false);
-
-        var now = DateTime.UtcNow;
-        var windowStart = now - _window;
-
-        // 清理过期记录
-        _failures[identifier].RemoveAll(t => t < windowStart);
-
-        return Task.FromResult(_failures[identifier].Count >= _maxAttempts);
+        if (_lockouts.TryGetValue(uid, out var state))
+        {
+            var remaining = (state.ExpiresAt - DateTime.UtcNow).TotalSeconds;
+            if (remaining > 0)
+                return Task.FromResult<double?>(remaining);
+            _lockouts.Remove(uid);
+        }
+        return Task.FromResult<double?>(null);
     }
 
-    public Task<double?> GetRemainingLockoutSecondsAsync(string identifier, CancellationToken cancellationToken = default)
+    public Task<LockoutFailureResult> RecordFailureAsync(int uid, string email, string ip, CancellationToken cancellationToken = default)
     {
-        if (!_failures.ContainsKey(identifier))
-            return Task.FromResult<double?>(null);
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var windowStart = now - (long)_window.TotalMilliseconds;
 
-        var now = DateTime.UtcNow;
-        var windowStart = now - _window;
+        var epCount = AddWindowed($"FAIL_EP:{email}:{ip}", now, windowStart);
+        AddWindowed($"FAIL_ACCT:{email}", now, windowStart);
 
-        // 清理过期记录
-        _failures[identifier].RemoveAll(t => t < windowStart);
+        var triggered = epCount >= _maxAttempts;
+        if (triggered)
+        {
+            var nextCount = _lockouts.TryGetValue(uid, out var prev) ? prev.Count + 1 : 1;
+            _lockouts[uid] = (nextCount, DateTime.UtcNow.Add(Backoff(nextCount)));
+        }
 
-        if (_failures[identifier].Count < _maxAttempts)
-            return Task.FromResult<double?>(null);
-
-        var earliestFailure = _failures[identifier].Min();
-        var lockoutEnd = earliestFailure + _lockoutDuration;
-
-        if (lockoutEnd <= now)
-            return Task.FromResult<double?>(0);
-
-        return Task.FromResult<double?>((lockoutEnd - now).TotalSeconds);
+        return Task.FromResult(new LockoutFailureResult(epCount, triggered));
     }
 
-    public Task ResetAsync(string identifier, CancellationToken cancellationToken = default)
+    /// <summary>T3-006 指数退避：base → 2base → 4base 封顶（默认 15→30→60min，§6.6/§8）</summary>
+    private TimeSpan Backoff(int triggerCount)
     {
-        _failures.Remove(identifier);
+        var factor = Math.Min(Math.Pow(2, triggerCount - 1), 4);
+        return TimeSpan.FromMinutes(_lockoutDuration.TotalMinutes * factor);
+    }
+
+    public Task RecordUnknownAccountFailureAsync(string identifier, CancellationToken cancellationToken = default)
+    {
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var windowStart = now - (long)_window.TotalMilliseconds;
+        AddWindowed($"FAIL_ACCT:{identifier}", now, windowStart);
         return Task.CompletedTask;
+    }
+
+    public Task ResetAsync(int uid, string email, string ip, CancellationToken cancellationToken = default)
+    {
+        _lockouts.Remove(uid);
+        _windows.Remove($"FAIL_EP:{email}:{ip}");
+        // FAIL_ACCT:{email} 仅审计，由窗口自然过期
+        return Task.CompletedTask;
+    }
+
+    private int AddWindowed(string key, long now, long windowStart)
+    {
+        if (!_windows.TryGetValue(key, out var list))
+        {
+            list = new List<long>();
+            _windows[key] = list;
+        }
+        list.RemoveAll(t => t < windowStart);
+        list.Add(now);
+        return list.Count;
     }
 }

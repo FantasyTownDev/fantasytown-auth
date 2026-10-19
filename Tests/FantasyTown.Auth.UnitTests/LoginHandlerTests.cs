@@ -23,7 +23,7 @@ public class LoginHandlerTests
 
     private async Task<int> CreateTestUser(AuthDbContext db, string username = "testuser", string email = "test@example.com", string password = "Password123!")
     {
-        var registerHandler = new RegisterUserHandler(db, _passwordService);
+        var registerHandler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService());
         var result = await registerHandler.HandleAsync(new RegisterUserCommand
         {
             Username = username,

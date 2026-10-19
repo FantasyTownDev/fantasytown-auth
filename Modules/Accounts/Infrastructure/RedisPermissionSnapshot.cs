@@ -13,7 +13,8 @@ public sealed class RedisPermissionSnapshot : IPermissionSnapshot
 {
     private readonly IConnectionMultiplexer _redis;
     private readonly AuthDbContext _db;
-    private readonly TimeSpan _cacheExpiration = TimeSpan.FromMinutes(30);
+    // V5 §3.4 冻结 TTL：PERM:{uid} 60s（T3-012）
+    private readonly TimeSpan _cacheExpiration = TimeSpan.FromSeconds(60);
     private readonly int _database;
 
     public RedisPermissionSnapshot(IConnectionMultiplexer redis, AuthDbContext db, int database = -1)
@@ -26,12 +27,17 @@ public sealed class RedisPermissionSnapshot : IPermissionSnapshot
     public async Task<PermissionSnapshot?> GetAsync(int uid, CancellationToken cancellationToken = default)
     {
         var db = _redis.GetDatabase(_database);
-        var key = $"PERM:PLAYER:{uid}";
+        var key = $"PERM:{uid}";
         
         var cached = await db.StringGetAsync(key);
         if (cached.HasValue)
         {
-            return JsonSerializer.Deserialize<PermissionSnapshot>(cached.ToString());
+            var hit = JsonSerializer.Deserialize<PermissionSnapshot>(cached.ToString());
+            if (hit != null)
+            {
+                return hit;
+            }
+            // 反序列化失败按缓存未命中处理，回源重建（C3）
         }
 
         // 回源查询数据库
@@ -47,19 +53,25 @@ public sealed class RedisPermissionSnapshot : IPermissionSnapshot
             })
             .FirstOrDefaultAsync(cancellationToken);
 
-        if (user != null)
+        // V5 评审 N2 哨兵语义：回源空结果 = 封禁等效哨兵（可缓存值，消除 miss-on-empty 回源风暴 / C3）
+        var snapshot = user ?? new PermissionSnapshot
         {
-            // 缓存结果
-            await db.StringSetAsync(key, JsonSerializer.Serialize(user), _cacheExpiration);
-        }
+            Permission = UserPermission.NormalPlayer,
+            IsBanned = true,
+            BannedUntil = null,
+            CreatedAt = DateTime.UtcNow
+        };
 
-        return user;
+        // 缓存结果（哨兵同样入缓存，防穿透）
+        await db.StringSetAsync(key, JsonSerializer.Serialize(snapshot), _cacheExpiration);
+
+        return snapshot;
     }
 
     public async Task SetAsync(int uid, PermissionSnapshot snapshot, CancellationToken cancellationToken = default)
     {
         var db = _redis.GetDatabase(_database);
-        var key = $"PERM:PLAYER:{uid}";
+        var key = $"PERM:{uid}";
         
         await db.StringSetAsync(key, JsonSerializer.Serialize(snapshot), _cacheExpiration);
     }
@@ -67,7 +79,7 @@ public sealed class RedisPermissionSnapshot : IPermissionSnapshot
     public async Task RemoveAsync(int uid, CancellationToken cancellationToken = default)
     {
         var db = _redis.GetDatabase(_database);
-        var key = $"PERM:PLAYER:{uid}";
+        var key = $"PERM:{uid}";
         
         await db.KeyDeleteAsync(key);
     }
