@@ -27,7 +27,7 @@ public sealed class RedisPermissionSnapshot : IPermissionSnapshot
     public async Task<PermissionSnapshot?> GetAsync(int uid, CancellationToken cancellationToken = default)
     {
         var db = _redis.GetDatabase(_database);
-        var key = $"PERM:PLAYER:{uid}";
+        var key = $"PERM:{uid}";
         
         var cached = await db.StringGetAsync(key);
         if (cached.HasValue)
@@ -60,7 +60,7 @@ public sealed class RedisPermissionSnapshot : IPermissionSnapshot
     public async Task SetAsync(int uid, PermissionSnapshot snapshot, CancellationToken cancellationToken = default)
     {
         var db = _redis.GetDatabase(_database);
-        var key = $"PERM:PLAYER:{uid}";
+        var key = $"PERM:{uid}";
         
         await db.StringSetAsync(key, JsonSerializer.Serialize(snapshot), _cacheExpiration);
     }
@@ -68,7 +68,7 @@ public sealed class RedisPermissionSnapshot : IPermissionSnapshot
     public async Task RemoveAsync(int uid, CancellationToken cancellationToken = default)
     {
         var db = _redis.GetDatabase(_database);
-        var key = $"PERM:PLAYER:{uid}";
+        var key = $"PERM:{uid}";
         
         await db.KeyDeleteAsync(key);
     }
