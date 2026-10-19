@@ -7,7 +7,8 @@ namespace FantasyTown.Auth.Modules.Accounts.Infrastructure;
 /// LOCKOUT:{uid}     — 账户锁定（count=触发次数，TTL=锁定时长；跨通道共享）
 /// FAIL_EP:{email}:{ip} — 同 IP 复合键 ZSET 滑动窗 15min（LOCKOUT 触发依据，阈值 5）
 /// FAIL_ACCT:{email} — 账户全局 ZSET 滑动窗 15min（仅审计/告警，不触发锁定）
-/// TODO(Step 0-c)：ZADD/EXPIRE/INCR 多命令改为 Lua 原子执行（审计 H4）
+/// H4：记录失败的"写入/修剪/过期/阈值判定/锁定"由单 Lua 脚本原子执行
+/// H3：仅精确键操作（无 IP 前缀清空），计数经滑动窗修剪 + 键 TTL 自然过期
 /// </summary>
 public sealed class RedisLockoutService : ILockoutService
 {
@@ -31,6 +32,37 @@ public sealed class RedisLockoutService : ILockoutService
         _database = database;
     }
 
+    /// <summary>
+    /// 记录一次已知账户失败（审计 H4 原子化）：
+    /// 双滑动窗写入/修剪/TTL + FAIL_EP 阈值判定 + LOCKOUT 触发，单脚本执行
+    /// </summary>
+    private static readonly LuaScript RecordFailureScript = LuaScript.Prepare(@"
+redis.call('ZADD', @epKey, @now, @epMember)
+redis.call('ZREMRANGEBYSCORE', @epKey, 0, @windowStart)
+redis.call('EXPIRE', @epKey, @windowSeconds)
+redis.call('ZADD', @acctKey, @now, @acctMember)
+redis.call('ZREMRANGEBYSCORE', @acctKey, 0, @windowStart)
+redis.call('EXPIRE', @acctKey, @windowSeconds)
+local count = redis.call('ZCARD', @epKey)
+local triggered = 0
+if count >= tonumber(@maxAttempts) then
+    redis.call('INCR', @lockoutKey)
+    redis.call('EXPIRE', @lockoutKey, @lockoutTtlSeconds)
+    triggered = 1
+end
+return {count, triggered}
+");
+
+    /// <summary>
+    /// 记录一次未知账户失败（仅 FAIL_ACCT 审计维度，单脚本原子执行）
+    /// </summary>
+    private static readonly LuaScript RecordUnknownFailureScript = LuaScript.Prepare(@"
+redis.call('ZADD', @acctKey, @now, @member)
+redis.call('ZREMRANGEBYSCORE', @acctKey, 0, @windowStart)
+redis.call('EXPIRE', @acctKey, @windowSeconds)
+return 1
+");
+
     public async Task<bool> IsLockedOutAsync(int uid, CancellationToken cancellationToken = default)
     {
         var db = _redis.GetDatabase(_database);
@@ -50,30 +82,23 @@ public sealed class RedisLockoutService : ILockoutService
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         var windowStart = now - (long)_window.TotalMilliseconds;
 
-        // FAIL_EP:{email}:{ip} 同 IP 复合键滑动窗
-        var epKey = $"FAIL_EP:{email}:{ip}";
-        await db.SortedSetAddAsync(epKey, $"{now}:{Guid.NewGuid():N}", now);
-        await db.SortedSetRemoveRangeByScoreAsync(epKey, 0, windowStart);
-        await db.KeyExpireAsync(epKey, _window);
-
-        // FAIL_ACCT:{email} 全局审计维度（不触发锁定）
-        var acctKey = $"FAIL_ACCT:{email}";
-        await db.SortedSetAddAsync(acctKey, $"{now}:{Guid.NewGuid():N}", now);
-        await db.SortedSetRemoveRangeByScoreAsync(acctKey, 0, windowStart);
-        await db.KeyExpireAsync(acctKey, _window);
-
-        var count = (int)await db.SortedSetLengthAsync(epKey);
-
-        // 仅"同一 IP 对同一账户"窗口内 ≥5 触发 LOCKOUT:{uid}（跨 IP 分散失败无法锁死账户）
-        var triggered = count >= _maxAttempts;
-        if (triggered)
+        var raw = await db.ScriptEvaluateAsync(RecordFailureScript, new
         {
-            var lockoutKey = LockoutKey(uid);
-            await db.StringIncrementAsync(lockoutKey);
-            await db.KeyExpireAsync(lockoutKey, _lockoutDuration);
-        }
+            epKey = (RedisKey)$"FAIL_EP:{email}:{ip}",
+            acctKey = (RedisKey)$"FAIL_ACCT:{email}",
+            lockoutKey = (RedisKey)LockoutKey(uid),
+            now = (RedisValue)now,
+            windowStart = (RedisValue)windowStart,
+            epMember = (RedisValue)$"{now}:{Guid.NewGuid():N}",
+            acctMember = (RedisValue)$"{now}:{Guid.NewGuid():N}",
+            windowSeconds = (RedisValue)(long)_window.TotalSeconds,
+            maxAttempts = (RedisValue)_maxAttempts,
+            lockoutTtlSeconds = (RedisValue)(long)_lockoutDuration.TotalSeconds
+        });
+        // 脚本契约：恒返回 {count, triggered}
+        var result = (RedisResult[])raw!;
 
-        return new LockoutFailureResult(count, triggered);
+        return new LockoutFailureResult((int)result[0], (int)result[1] == 1);
     }
 
     public async Task RecordUnknownAccountFailureAsync(string identifier, CancellationToken cancellationToken = default)
@@ -83,10 +108,14 @@ public sealed class RedisLockoutService : ILockoutService
         var windowStart = now - (long)_window.TotalMilliseconds;
 
         // 未知账户：仅 FAIL_ACCT 审计维度，永不设置 LOCKOUT（无 uid 可锁）
-        var acctKey = $"FAIL_ACCT:{identifier}";
-        await db.SortedSetAddAsync(acctKey, $"{now}:{Guid.NewGuid():N}", now);
-        await db.SortedSetRemoveRangeByScoreAsync(acctKey, 0, windowStart);
-        await db.KeyExpireAsync(acctKey, _window);
+        await db.ScriptEvaluateAsync(RecordUnknownFailureScript, new
+        {
+            acctKey = (RedisKey)$"FAIL_ACCT:{identifier}",
+            now = (RedisValue)now,
+            member = (RedisValue)$"{now}:{Guid.NewGuid():N}",
+            windowStart = (RedisValue)windowStart,
+            windowSeconds = (RedisValue)(long)_window.TotalSeconds
+        });
     }
 
     public async Task ResetAsync(int uid, string email, string ip, CancellationToken cancellationToken = default)

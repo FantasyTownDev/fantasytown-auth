@@ -124,6 +124,30 @@ public class RedisAcceptanceTests : IDisposable
     }
 
     /// <summary>
+    /// H4 回归：并发失败下"检查+递增+锁定"单脚本原子执行——
+    /// 5 次并发同 IP 失败必然触发锁定且计数零丢失（修复前读写分离会漏触发）
+    /// </summary>
+    [Fact]
+    public async Task Lockout_ConcurrentSameIpFailures_ShouldTriggerWithoutLostCounts()
+    {
+        var uid = Random.Shared.Next(50000, 60000);
+        var email = $"burst_{Guid.NewGuid():N}@test.local";
+        var ip = "192.168.1.200";
+
+        var results = await Task.WhenAll(
+            Enumerable.Range(0, 5).Select(_ => _lockoutService.RecordFailureAsync(uid, email, ip)));
+
+        Assert.Contains(results, r => r.LockoutTriggered);
+        Assert.True(await _lockoutService.IsLockedOutAsync(uid));
+
+        var db = _redis.GetDatabase(15);
+        Assert.Equal(5, await db.SortedSetLengthAsync($"FAIL_EP:{email}:{ip}"));
+
+        // 清理
+        await _lockoutService.ResetAsync(uid, email, ip);
+    }
+
+    /// <summary>
     /// Web 登录同 IP 失败 5 次 → LOCKOUT:{uid} 生效
     /// （Ygg authenticate 检查同一键空间，任一通道触发即全域锁定，§6.6）
     /// </summary>
