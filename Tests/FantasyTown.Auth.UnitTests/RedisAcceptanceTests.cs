@@ -179,6 +179,32 @@ public class RedisAcceptanceTests : IDisposable
     }
 
     /// <summary>
+    /// M2 回归：FAIL_IP 固定窗计数单脚本原子执行——
+    /// 首次请求即写入 TTL（修复前 INCR/EXPIRE 分离，中断则键永不过期，IP 被永久限死）
+    /// </summary>
+    [Fact]
+    public async Task IpRateLimiter_FirstHit_SetsWindowTtlAtomically()
+    {
+        var limiter = new FantasyTown.Auth.Modules.Yggdrasil.Authserver.IpRateLimiter(_redis, limit: 3, database: 15);
+        var key = $"m2_{Guid.NewGuid():N}";
+
+        Assert.True(await limiter.IsAllowedAsync(key));
+
+        var db = _redis.GetDatabase(15);
+        var ttl = await db.KeyTimeToLiveAsync($"FAIL_IP:{key}");
+        Assert.NotNull(ttl);
+        Assert.InRange(ttl!.Value.TotalSeconds, 30, 60);
+
+        // 阈值语义保持：limit 内放行，超限拒绝
+        Assert.True(await limiter.IsAllowedAsync(key));
+        Assert.True(await limiter.IsAllowedAsync(key));
+        Assert.False(await limiter.IsAllowedAsync(key));
+
+        // 清理
+        await db.KeyDeleteAsync($"FAIL_IP:{key}");
+    }
+
+    /// <summary>
     /// Web 登录同 IP 失败 5 次 → LOCKOUT:{uid} 生效
     /// （Ygg authenticate 检查同一键空间，任一通道触发即全域锁定，§6.6）
     /// </summary>
