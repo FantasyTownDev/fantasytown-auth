@@ -36,6 +36,12 @@ public class ValidateHandlerTests : IDisposable
     public async Task HandleAsync_ValidToken_ShouldReturnValid()
     {
         var token = await _tokenService.IssueAsync(1, "test@test.com", "client-1", "uuid-123", 0);
+        await _permissionSnapshot.SetAsync(1, new PermissionSnapshot
+        {
+            Permission = UserPermission.NormalPlayer,
+            IsBanned = false,
+            CreatedAt = DateTime.UtcNow
+        });
 
         var result = await _handler.HandleAsync(token.AccessToken, "client-1");
 
@@ -63,6 +69,12 @@ public class ValidateHandlerTests : IDisposable
     public async Task HandleAsync_NullClientToken_ShouldPass()
     {
         var token = await _tokenService.IssueAsync(1, "test@test.com", "client-1", null, 0);
+        await _permissionSnapshot.SetAsync(1, new PermissionSnapshot
+        {
+            Permission = UserPermission.NormalPlayer,
+            IsBanned = false,
+            CreatedAt = DateTime.UtcNow
+        });
 
         var result = await _handler.HandleAsync(token.AccessToken, null);
 
@@ -87,14 +99,14 @@ public class ValidateHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task HandleAsync_NoSnapshot_ShouldReturnValid()
+    public async Task HandleAsync_NoSnapshot_ShouldReturnInvalid()
     {
+        // C3 回归：null 快照 = 封禁等效哨兵，不得按"无权限记录 = 允许"放行
         var token = await _tokenService.IssueAsync(1, "test@test.com", null, null, 0);
 
-        // 无快照 = 允许（哨兵语义由中间件处理）
         var result = await _handler.HandleAsync(token.AccessToken, null);
 
-        Assert.True(result.IsValid);
+        Assert.False(result.IsValid);
     }
 }
 
@@ -223,6 +235,12 @@ public class RefreshHandlerTests : IDisposable
     public async Task HandleAsync_ValidToken_ShouldReturnNewToken()
     {
         var old = await _tokenService.IssueAsync(1, "test@test.com", "client-1", "old-uuid", 0);
+        await _permissionSnapshot.SetAsync(1, new PermissionSnapshot
+        {
+            Permission = UserPermission.NormalPlayer,
+            IsBanned = false,
+            CreatedAt = DateTime.UtcNow
+        });
 
         var result = await _handler.HandleAsync(old.AccessToken, "client-1", "new-uuid");
 
@@ -259,6 +277,17 @@ public class RefreshHandlerTests : IDisposable
             BannedUntil = DateTime.UtcNow.AddHours(1),
             CreatedAt = DateTime.UtcNow
         });
+
+        var result = await _handler.HandleAsync(old.AccessToken, null, null);
+
+        Assert.False(result.IsValid);
+    }
+
+    [Fact]
+    public async Task HandleAsync_NoSnapshot_ShouldReturnInvalid()
+    {
+        // C3 回归：null 快照 = 封禁等效哨兵，不得按"无权限记录 = 允许"放行
+        var old = await _tokenService.IssueAsync(1, "test@test.com", null, null, 0);
 
         var result = await _handler.HandleAsync(old.AccessToken, null, null);
 

@@ -8,6 +8,9 @@ public sealed record TokenRecord
     /// <summary>令牌所属用户 UID</summary>
     public required int OwnerUid { get; init; }
 
+    /// <summary>令牌所属账户邮箱（C4：refresh 换发时据此重挂 ID:{email} 反向链）</summary>
+    public string? Email { get; init; }
+
     /// <summary>客户端令牌（可选，用于 validate 时匹配）</summary>
     public string? ClientToken { get; init; }
 

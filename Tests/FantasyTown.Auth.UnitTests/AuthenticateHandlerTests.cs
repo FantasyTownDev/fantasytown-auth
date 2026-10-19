@@ -70,6 +70,14 @@ public class AuthenticateHandlerTests : IDisposable
             await _db.SaveChangesAsync();
         }
 
+        // C3：播种账户权限快照（生产语义：回源后 PERM 快照存在；null 快照将按封禁等效拒绝）
+        await _permissionSnapshot.SetAsync(user.Uid, new PermissionSnapshot
+        {
+            Permission = UserPermission.NormalPlayer,
+            IsBanned = false,
+            CreatedAt = DateTime.UtcNow
+        });
+
         return user;
     }
 
@@ -154,10 +162,29 @@ public class AuthenticateHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task HandleAsync_NullSnapshot_ShouldReturnForbidden()
+    {
+        // C3 回归：null 快照 = 封禁等效哨兵，不得按"无权限记录 = 允许"放行
+        var user = await CreateUser();
+        await _permissionSnapshot.RemoveAsync(user.Uid);
+
+        var request = new AuthenticateRequest
+        {
+            Username = "test@test.com",
+            Password = "password123"
+        };
+
+        var result = await _handler.HandleAsync(request, "127.0.0.1");
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(403, result.StatusCode);
+    }
+
+    [Fact]
     public async Task HandleAsync_LockedUser_ShouldReturnForbidden()
     {
         var user = await CreateUser();
-        await _lockoutService.LockAsync($"USER:{user.Uid}", TimeSpan.FromMinutes(15));
+        await _lockoutService.LockAsync(user.Uid, TimeSpan.FromMinutes(15));
 
         var request = new AuthenticateRequest
         {
@@ -195,7 +222,7 @@ public class AuthenticateHandlerTests : IDisposable
     {
         var user = await CreateUser();
         // 模拟之前的失败尝试
-        await _lockoutService.RecordFailureAsync($"USER:{user.Uid}");
+        await _lockoutService.RecordFailureAsync(user.Uid, user.Email, "127.0.0.1");
 
         var request = new AuthenticateRequest
         {
@@ -206,7 +233,7 @@ public class AuthenticateHandlerTests : IDisposable
         var result = await _handler.HandleAsync(request, "127.0.0.1");
 
         Assert.True(result.IsSuccess);
-        Assert.False(await _lockoutService.IsLockedOutAsync($"USER:{user.Uid}"));
+        Assert.False(await _lockoutService.IsLockedOutAsync(user.Uid));
     }
 
     [Fact]
@@ -221,7 +248,7 @@ public class AuthenticateHandlerTests : IDisposable
 
         await _handler.HandleAsync(request, "127.0.0.1");
 
-        var isLocked = await _lockoutService.IsLockedOutAsync($"USER:{user.Uid}");
+        var isLocked = await _lockoutService.IsLockedOutAsync(user.Uid);
         Assert.False(isLocked); // 第一次失败不会锁定
     }
 
@@ -235,14 +262,35 @@ public class AuthenticateHandlerTests : IDisposable
             Password = "wrongpassword"
         };
 
-        // 连续失败 5 次
+        // 同一 IP 连续失败 5 次（FAIL_EP:{email}:{ip} 窗口内 ≥5 → LOCKOUT:{uid}）
         for (int i = 0; i < 5; i++)
         {
             await _handler.HandleAsync(request, "127.0.0.1");
         }
 
-        var isLocked = await _lockoutService.IsLockedOutAsync($"USER:{user.Uid}");
+        var isLocked = await _lockoutService.IsLockedOutAsync(user.Uid);
         Assert.True(isLocked);
+    }
+
+    [Fact]
+    public async Task HandleAsync_CrossIpDistributedFailures_ShouldNotTriggerLockout()
+    {
+        // T3-003 回归：攻击者用 5 个不同 IP 各失败 1 次，不得锁死受害者账户
+        // （仅同 IP 复合键 FAIL_EP:{email}:{ip} 达阈值才触发 LOCKOUT:{uid}）
+        var user = await CreateUser();
+        var request = new AuthenticateRequest
+        {
+            Username = "test@test.com",
+            Password = "wrongpassword"
+        };
+
+        for (int i = 0; i < 5; i++)
+        {
+            var result = await _handler.HandleAsync(request, $"10.33.{i}.1");
+            Assert.False(result.IsSuccess);
+        }
+
+        Assert.False(await _lockoutService.IsLockedOutAsync(user.Uid));
     }
 
     [Fact]
@@ -321,54 +369,78 @@ public class InMemoryPasswordService : IPasswordService
 /// </summary>
 public class InMemoryLockoutService : ILockoutService
 {
-    private readonly Dictionary<string, (int count, DateTime? lockedUntil)> _lockouts = new();
+    private readonly Dictionary<string, List<long>> _windows = new();
+    private readonly Dictionary<int, (int Count, DateTime ExpiresAt)> _lockouts = new();
+    private readonly int _maxAttempts = 5;
+    private readonly TimeSpan _window = TimeSpan.FromMinutes(15);
+    private readonly TimeSpan _lockoutDuration = TimeSpan.FromMinutes(15);
 
-    public Task<int> RecordFailureAsync(string key, CancellationToken cancellationToken = default)
+    public Task<LockoutFailureResult> RecordFailureAsync(int uid, string email, string ip, CancellationToken cancellationToken = default)
     {
-        if (!_lockouts.ContainsKey(key))
-            _lockouts[key] = (0, null);
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var windowStart = now - (long)_window.TotalMilliseconds;
 
-        var (count, _) = _lockouts[key];
-        count++;
-        _lockouts[key] = (count, null);
+        var epCount = AddWindowed($"FAIL_EP:{email}:{ip}", now, windowStart);
+        AddWindowed($"FAIL_ACCT:{email}", now, windowStart);
 
-        // 5 次失败后锁定 15 分钟
-        if (count >= 5)
+        var triggered = epCount >= _maxAttempts;
+        if (triggered)
         {
-            _lockouts[key] = (count, DateTime.UtcNow.AddMinutes(15));
+            var nextCount = _lockouts.TryGetValue(uid, out var prev) ? prev.Count + 1 : 1;
+            _lockouts[uid] = (nextCount, DateTime.UtcNow.Add(_lockoutDuration));
         }
 
-        return Task.FromResult(count);
+        return Task.FromResult(new LockoutFailureResult(epCount, triggered));
     }
 
-    public Task<bool> IsLockedOutAsync(string key, CancellationToken cancellationToken = default)
+    public Task RecordUnknownAccountFailureAsync(string identifier, CancellationToken cancellationToken = default)
     {
-        if (_lockouts.TryGetValue(key, out var state) && state.lockedUntil.HasValue)
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var windowStart = now - (long)_window.TotalMilliseconds;
+        AddWindowed($"FAIL_ACCT:{identifier}", now, windowStart);
+        return Task.CompletedTask;
+    }
+
+    public Task<bool> IsLockedOutAsync(int uid, CancellationToken cancellationToken = default)
+    {
+        if (_lockouts.TryGetValue(uid, out var state) && state.ExpiresAt > DateTime.UtcNow)
         {
-            return Task.FromResult(state.lockedUntil.Value > DateTime.UtcNow);
+            return Task.FromResult(true);
         }
         return Task.FromResult(false);
     }
 
-    public Task<double?> GetRemainingLockoutSecondsAsync(string key, CancellationToken cancellationToken = default)
+    public Task<double?> GetRemainingLockoutSecondsAsync(int uid, CancellationToken cancellationToken = default)
     {
-        if (_lockouts.TryGetValue(key, out var state) && state.lockedUntil.HasValue)
+        if (_lockouts.TryGetValue(uid, out var state) && state.ExpiresAt > DateTime.UtcNow)
         {
-            var remaining = (state.lockedUntil.Value - DateTime.UtcNow).TotalSeconds;
-            return Task.FromResult<double?>(remaining > 0 ? remaining : 0);
+            return Task.FromResult<double?>((state.ExpiresAt - DateTime.UtcNow).TotalSeconds);
         }
         return Task.FromResult<double?>(null);
     }
 
-    public Task ResetAsync(string key, CancellationToken cancellationToken = default)
+    public Task ResetAsync(int uid, string email, string ip, CancellationToken cancellationToken = default)
     {
-        _lockouts.Remove(key);
+        _lockouts.Remove(uid);
+        _windows.Remove($"FAIL_EP:{email}:{ip}");
         return Task.CompletedTask;
     }
 
-    public Task LockAsync(string key, TimeSpan duration, CancellationToken cancellationToken = default)
+    public Task LockAsync(int uid, TimeSpan duration, CancellationToken cancellationToken = default)
     {
-        _lockouts[key] = (5, DateTime.UtcNow.Add(duration));
+        _lockouts[uid] = (5, DateTime.UtcNow.Add(duration));
         return Task.CompletedTask;
+    }
+
+    private int AddWindowed(string key, long now, long windowStart)
+    {
+        if (!_windows.TryGetValue(key, out var list))
+        {
+            list = new List<long>();
+            _windows[key] = list;
+        }
+        list.RemoveAll(t => t < windowStart);
+        list.Add(now);
+        return list.Count;
     }
 }

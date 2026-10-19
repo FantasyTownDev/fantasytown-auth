@@ -12,7 +12,8 @@ public interface IPermissionSnapshot
     /// </summary>
     /// <param name="uid">用户 ID</param>
     /// <param name="cancellationToken">取消令牌</param>
-    /// <returns>权限快照（null 表示用户不存在或已删除）</returns>
+    /// <returns>权限快照。实现保证回源空结果返回封禁等效哨兵（IsBanned=true、BannedUntil=null，V5 评审 N2）；
+    /// null 仅作防御性残留值，调用方一律按封禁等效拒绝处理（审计 C3）。</returns>
     Task<PermissionSnapshot?> GetAsync(int uid, CancellationToken cancellationToken = default);
 
     /// <summary>

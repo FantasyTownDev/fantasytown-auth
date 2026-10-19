@@ -1,10 +1,16 @@
 using FantasyTown.Auth.Middleware;
 using FantasyTown.Auth.Modules.Accounts.Infrastructure;
+using FantasyTown.Auth.Modules.Shared;
 using FantasyTown.Auth.Modules.Yggdrasil.Authserver;
 using FantasyTown.Auth.Modules.Yggdrasil.Sessions;
 using FantasyTown.Auth.Persistence;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.DataProtection.StackExchangeRedis;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using System.Net;
 using StackExchange.Redis;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
@@ -12,9 +18,16 @@ using OpenTelemetry.Trace;
 var builder = WebApplication.CreateBuilder(args);
 
 // 1. 基础设施
+// T3-005：基础配置不携带可用凭据，通过环境变量注入（V5 §10：Secret → 容器/环境变量）
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+if (string.IsNullOrWhiteSpace(connectionString))
+{
+    throw new InvalidOperationException(
+        "ConnectionStrings:DefaultConnection is not configured. " +
+        "Inject credentials via environment variable ConnectionStrings__DefaultConnection (V5 §10).");
+}
 builder.Services.AddDbContextPool<AuthDbContext>(options =>
 {
-    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
     options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString));
 });
 
@@ -32,9 +45,15 @@ redisConfig.EndPoints.Add(redisHost);
 if (!string.IsNullOrEmpty(redisPassword))
     Console.WriteLine($"[Redis] Connecting with password (length={redisPassword.Length})");
 else
-    Console.WriteLine("[Redis] WARNING: No password configured!");
+    Console.WriteLine("[Redis] WARNING: No password configured! Inject Redis__Password via environment in production (V5 §10).");
 
-builder.Services.AddSingleton<IConnectionMultiplexer>(ConnectionMultiplexer.Connect(redisConfig));
+var redisConnection = ConnectionMultiplexer.Connect(redisConfig);
+builder.Services.AddSingleton<IConnectionMultiplexer>(redisConnection);
+
+// DataProtection 密钥 Redis 化（V5 §9.6/§10：多实例共享；重新部署不丢已签发限时令牌）
+builder.Services.AddDataProtection()
+    .PersistKeysToStackExchangeRedis(redisConnection, "DATA_PROTECT:keys")
+    .SetApplicationName("FantasyTown.Auth");
 
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<AuthDbContext>()
@@ -70,14 +89,29 @@ builder.Services.AddScoped<IPasswordService, Argon2PasswordService>();
 builder.Services.AddScoped<IPermissionSnapshot, RedisPermissionSnapshot>();
 builder.Services.AddScoped<ILockoutService, RedisLockoutService>();
 
+// 4.1 反代信任与客户端 IP（V5 §8：仅信任显式配置的 KnownProxies；未配置时保持直连 RemoteIpAddress 语义）
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<IClientIp, HttpContextClientIp>();
+
+var forwardedHeadersOptions = new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+};
+// 清空框架默认信任（回环），改为纯显式白名单
+forwardedHeadersOptions.KnownIPNetworks.Clear();
+forwardedHeadersOptions.KnownProxies.Clear();
+foreach (var proxy in builder.Configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>() ?? [])
+{
+    if (IPAddress.TryParse(proxy, out var ip))
+    {
+        forwardedHeadersOptions.KnownProxies.Add(ip);
+    }
+}
+builder.Services.AddSingleton(Options.Create(forwardedHeadersOptions));
+
 // 5. Yggdrasil 服务
 var yggOptions = builder.Configuration.GetSection("Yggdrasil").Get<YggOptions>() ?? new YggOptions();
 builder.Services.AddSingleton(yggOptions);
-builder.Services.AddSingleton(sp =>
-{
-    var redis = sp.GetRequiredService<IConnectionMultiplexer>();
-    return new AccountRateLimiter(redis);
-});
 builder.Services.AddSingleton<AuthConcurrencyLimiter>();
 builder.Services.AddSingleton<IRateLimiter>(sp =>
 {
@@ -178,6 +212,9 @@ using (var scope = app.Services.CreateScope())
         }
     }
 }
+
+// 0. 反代头解析（V5 §8：必须位于管道最前端，此后 RemoteIpAddress 即为受信客户端 IP）
+app.UseForwardedHeaders();
 
 // 中间件管道
 if (!app.Environment.IsDevelopment())
