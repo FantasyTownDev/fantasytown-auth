@@ -91,7 +91,7 @@ public sealed class LoginHandler
         // 6. 密码正确，清除 LOCKOUT:{uid} 与 FAIL_EP:{email}:{ip}
         await _lockoutService.ResetAsync(user.Uid, user.Email, query.ClientIp, cancellationToken);
 
-        // 8. 更新权限快照
+        // 7. 更新权限快照
         await _permissionSnapshot.SetAsync(user.Uid, new PermissionSnapshot
         {
             Permission = user.Permission,
@@ -99,7 +99,7 @@ public sealed class LoginHandler
             CreatedAt = nowUtc
         }, cancellationToken);
 
-        // 9. 如果之前被封禁但已过期，清除封禁状态
+        // 8. 如果之前被封禁但已过期，清除封禁状态
         if (user.IsBanned && user.BannedUntil.HasValue && user.BannedUntil.Value <= nowUtc)
         {
             user.IsBanned = false;
