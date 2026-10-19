@@ -22,7 +22,7 @@ public class RegisterUserHandlerTests
     public async Task HandleAsync_ValidCommand_ReturnsSuccess()
     {
         using var db = CreateInMemoryDbContext();
-        var handler = new RegisterUserHandler(db, _passwordService);
+        var handler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService());
 
         var command = new RegisterUserCommand
         {
@@ -47,7 +47,7 @@ public class RegisterUserHandlerTests
     public async Task HandleAsync_DuplicateUsername_LogicallyReturnsFailure()
     {
         using var db = CreateInMemoryDbContext();
-        var handler = new RegisterUserHandler(db, _passwordService);
+        var handler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService());
 
         var command1 = new RegisterUserCommand
         {
@@ -78,7 +78,7 @@ public class RegisterUserHandlerTests
     public async Task HandleAsync_DuplicateEmail_LogicallyReturnsFailure()
     {
         using var db = CreateInMemoryDbContext();
-        var handler = new RegisterUserHandler(db, _passwordService);
+        var handler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService());
 
         var command1 = new RegisterUserCommand
         {
@@ -111,7 +111,7 @@ public class RegisterUserHandlerTests
     public async Task HandleAsync_InvalidUsername_ReturnsFailure(string username)
     {
         using var db = CreateInMemoryDbContext();
-        var handler = new RegisterUserHandler(db, _passwordService);
+        var handler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService());
 
         var command = new RegisterUserCommand
         {
@@ -133,7 +133,7 @@ public class RegisterUserHandlerTests
     public async Task HandleAsync_WeakPassword_ReturnsFailure(string password)
     {
         using var db = CreateInMemoryDbContext();
-        var handler = new RegisterUserHandler(db, _passwordService);
+        var handler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService());
 
         var command = new RegisterUserCommand
         {
@@ -155,7 +155,7 @@ public class RegisterUserHandlerTests
     public async Task HandleAsync_InvalidEmail_ReturnsFailure(string email)
     {
         using var db = CreateInMemoryDbContext();
-        var handler = new RegisterUserHandler(db, _passwordService);
+        var handler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService());
 
         var command = new RegisterUserCommand
         {
@@ -175,7 +175,7 @@ public class RegisterUserHandlerTests
     public async Task HandleAsync_NullEmail_Succeeds()
     {
         using var db = CreateInMemoryDbContext();
-        var handler = new RegisterUserHandler(db, _passwordService);
+        var handler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService());
 
         var command = new RegisterUserCommand
         {
@@ -195,7 +195,7 @@ public class RegisterUserHandlerTests
     public async Task HandleAsync_CreatesUserInDatabase()
     {
         using var db = CreateInMemoryDbContext();
-        var handler = new RegisterUserHandler(db, _passwordService);
+        var handler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService());
 
         var command = new RegisterUserCommand
         {
@@ -218,7 +218,7 @@ public class RegisterUserHandlerTests
     public async Task HandleAsync_CreatesPlayerInDatabase()
     {
         using var db = CreateInMemoryDbContext();
-        var handler = new RegisterUserHandler(db, _passwordService);
+        var handler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService());
 
         var command = new RegisterUserCommand
         {
@@ -235,5 +235,68 @@ public class RegisterUserHandlerTests
         Assert.NotNull(player);
         Assert.Equal(result.PlayerUuid?.ToString("N").ToUpperInvariant(), player.Uuid);
         Assert.Equal(result.UserId, player.Uid);
+    }
+
+    /// <summary>
+    /// M5 回归：REG_IP 粗检超限 → 拒绝注册且不落库（V5 §3.4/§4.1 软配额）
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_QuotaExceeded_ShouldRejectBeforePersistence()
+    {
+        using var db = CreateInMemoryDbContext();
+        var quota = new InMemoryRegistrationQuotaService(limit: 1);
+        var handler = new RegisterUserHandler(db, _passwordService, quota);
+
+        var first = await handler.HandleAsync(new RegisterUserCommand
+        {
+            Username = "quota_ok",
+            Password = "Password123!",
+            Email = "quota_ok@example.com",
+            ClientIp = "10.9.9.1"
+        });
+        Assert.True(first.IsSuccess);
+
+        var second = await handler.HandleAsync(new RegisterUserCommand
+        {
+            Username = "quota_rejected",
+            Password = "Password123!",
+            Email = "quota_rejected@example.com",
+            ClientIp = "10.9.9.1"
+        });
+        Assert.False(second.IsSuccess);
+        Assert.Contains("注册过于频繁", second.ErrorMessage);
+
+        // 粗检拒绝发生在落库前：仅首个用户存在
+        Assert.Equal(1, await db.Users.CountAsync());
+    }
+
+    /// <summary>
+    /// M5：失败请求不消耗配额（§4.1 防 NAT 出口 IP 配额 DoS）——
+    /// 校验失败的请求不计数，同 IP 后续成功注册仍可占满配额
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_FailedValidation_DoesNotConsumeQuota()
+    {
+        using var db = CreateInMemoryDbContext();
+        var quota = new InMemoryRegistrationQuotaService(limit: 1);
+        var handler = new RegisterUserHandler(db, _passwordService, quota);
+
+        // 弱密码校验失败（不计数）
+        var weak = await handler.HandleAsync(new RegisterUserCommand
+        {
+            Username = "weak_user",
+            Password = "123",
+            ClientIp = "10.9.9.2"
+        });
+        Assert.False(weak.IsSuccess);
+
+        //配额未被失败请求消耗：合法注册仍放行
+        var ok = await handler.HandleAsync(new RegisterUserCommand
+        {
+            Username = "weak_user_ok",
+            Password = "Password123!",
+            ClientIp = "10.9.9.2"
+        });
+        Assert.True(ok.IsSuccess);
     }
 }

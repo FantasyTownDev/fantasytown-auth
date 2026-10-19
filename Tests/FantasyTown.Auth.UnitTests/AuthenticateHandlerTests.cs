@@ -387,10 +387,17 @@ public class InMemoryLockoutService : ILockoutService
         if (triggered)
         {
             var nextCount = _lockouts.TryGetValue(uid, out var prev) ? prev.Count + 1 : 1;
-            _lockouts[uid] = (nextCount, DateTime.UtcNow.Add(_lockoutDuration));
+            _lockouts[uid] = (nextCount, DateTime.UtcNow.Add(Backoff(nextCount)));
         }
 
         return Task.FromResult(new LockoutFailureResult(epCount, triggered));
+    }
+
+    /// <summary>T3-006 指数退避：base → 2base → 4base 封顶（默认 15→30→60min，§6.6/§8）</summary>
+    private TimeSpan Backoff(int triggerCount)
+    {
+        var factor = Math.Min(Math.Pow(2, triggerCount - 1), 4);
+        return TimeSpan.FromMinutes(_lockoutDuration.TotalMinutes * factor);
     }
 
     public Task RecordUnknownAccountFailureAsync(string identifier, CancellationToken cancellationToken = default)

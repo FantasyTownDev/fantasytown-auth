@@ -124,6 +124,87 @@ public class RedisAcceptanceTests : IDisposable
     }
 
     /// <summary>
+    /// H4 回归：并发失败下"检查+递增+锁定"单脚本原子执行——
+    /// 5 次并发同 IP 失败必然触发锁定且计数零丢失（修复前读写分离会漏触发）
+    /// </summary>
+    [Fact]
+    public async Task Lockout_ConcurrentSameIpFailures_ShouldTriggerWithoutLostCounts()
+    {
+        var uid = Random.Shared.Next(50000, 60000);
+        var email = $"burst_{Guid.NewGuid():N}@test.local";
+        var ip = "192.168.1.200";
+
+        var results = await Task.WhenAll(
+            Enumerable.Range(0, 5).Select(_ => _lockoutService.RecordFailureAsync(uid, email, ip)));
+
+        Assert.Contains(results, r => r.LockoutTriggered);
+        Assert.True(await _lockoutService.IsLockedOutAsync(uid));
+
+        var db = _redis.GetDatabase(15);
+        Assert.Equal(5, await db.SortedSetLengthAsync($"FAIL_EP:{email}:{ip}"));
+
+        // 清理
+        await _lockoutService.ResetAsync(uid, email, ip);
+    }
+
+    /// <summary>
+    /// T3-006：LOCKOUT TTL 按触发次数指数退避 15→30→60min 封顶（V5 §6.6/§8）
+    /// </summary>
+    [Fact]
+    public async Task Lockout_RepeatedTriggers_ShouldEscalateTtl15To30To60()
+    {
+        var uid = Random.Shared.Next(50000, 60000);
+        var email = $"bo_{Guid.NewGuid():N}@test.local";
+        var ip = "192.168.1.300";
+        var db = _redis.GetDatabase(15);
+
+        // 第 1 次触发 → 15min（容差：整秒 TTL + 查询耗时）
+        for (int i = 0; i < 5; i++) await _lockoutService.RecordFailureAsync(uid, email, ip);
+        Assert.InRange((await db.KeyTimeToLiveAsync($"LOCKOUT:{uid}"))!.Value.TotalSeconds, 850, 900);
+
+        // 锁定期内再次触发（直接调服务，模拟并发在途请求）→ 第 2 次触发 → 30min
+        await _lockoutService.RecordFailureAsync(uid, email, ip);
+        Assert.InRange((await db.KeyTimeToLiveAsync($"LOCKOUT:{uid}"))!.Value.TotalSeconds, 1750, 1800);
+
+        // 第 3 次触发 → 60min
+        await _lockoutService.RecordFailureAsync(uid, email, ip);
+        Assert.InRange((await db.KeyTimeToLiveAsync($"LOCKOUT:{uid}"))!.Value.TotalSeconds, 3550, 3600);
+
+        // 第 4 次触发 → 仍封顶 60min（不无限退避）
+        await _lockoutService.RecordFailureAsync(uid, email, ip);
+        Assert.InRange((await db.KeyTimeToLiveAsync($"LOCKOUT:{uid}"))!.Value.TotalSeconds, 3550, 3600);
+
+        // 清理
+        await _lockoutService.ResetAsync(uid, email, ip);
+    }
+
+    /// <summary>
+    /// M2 回归：FAIL_IP 固定窗计数单脚本原子执行——
+    /// 首次请求即写入 TTL（修复前 INCR/EXPIRE 分离，中断则键永不过期，IP 被永久限死）
+    /// </summary>
+    [Fact]
+    public async Task IpRateLimiter_FirstHit_SetsWindowTtlAtomically()
+    {
+        var limiter = new FantasyTown.Auth.Modules.Yggdrasil.Authserver.IpRateLimiter(_redis, limit: 3, database: 15);
+        var key = $"m2_{Guid.NewGuid():N}";
+
+        Assert.True(await limiter.IsAllowedAsync(key));
+
+        var db = _redis.GetDatabase(15);
+        var ttl = await db.KeyTimeToLiveAsync($"FAIL_IP:{key}");
+        Assert.NotNull(ttl);
+        Assert.InRange(ttl!.Value.TotalSeconds, 30, 60);
+
+        // 阈值语义保持：limit 内放行，超限拒绝
+        Assert.True(await limiter.IsAllowedAsync(key));
+        Assert.True(await limiter.IsAllowedAsync(key));
+        Assert.False(await limiter.IsAllowedAsync(key));
+
+        // 清理
+        await db.KeyDeleteAsync($"FAIL_IP:{key}");
+    }
+
+    /// <summary>
     /// Web 登录同 IP 失败 5 次 → LOCKOUT:{uid} 生效
     /// （Ygg authenticate 检查同一键空间，任一通道触发即全域锁定，§6.6）
     /// </summary>
@@ -131,7 +212,7 @@ public class RedisAcceptanceTests : IDisposable
     public async Task LoginFailed_ShouldLockAccountViaSharedKeyspace()
     {
         using var db = CreateInMemoryDbContext();
-        var registerHandler = new RegisterUserHandler(db, _passwordService);
+        var registerHandler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService());
         var username = $"lok_{Guid.NewGuid().ToString("N")[..8]}";
         var clientIp = $"10.{Random.Shared.Next(1, 255)}.{Random.Shared.Next(1, 255)}.{Random.Shared.Next(1, 255)}";
 

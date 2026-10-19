@@ -20,7 +20,7 @@ public class PasswordResetHandlerTests
 
     private async Task<int> CreateTestUser(AuthDbContext db, string email = "test@example.com")
     {
-        var registerHandler = new RegisterUserHandler(db, _passwordService);
+        var registerHandler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService());
         var result = await registerHandler.HandleAsync(new RegisterUserCommand
         {
             Username = "testuser",

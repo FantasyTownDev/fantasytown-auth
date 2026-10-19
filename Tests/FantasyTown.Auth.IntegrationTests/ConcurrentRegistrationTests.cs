@@ -67,7 +67,7 @@ public class ConcurrentRegistrationTests : IAsyncLifetime
             tasks.Add(Task.Run(async () =>
             {
                 using var context = CreateContext();
-                var handler = new RegisterUserHandler(context, new FakePasswordService());
+                var handler = new RegisterUserHandler(context, new FakePasswordService(), new InMemoryRegistrationQuotaService());
                 var command = new RegisterUserCommand
                 {
                     Email = runEmail,
@@ -106,7 +106,7 @@ public class ConcurrentRegistrationTests : IAsyncLifetime
             tasks.Add(Task.Run(async () =>
             {
                 using var context = CreateContext();
-                var handler = new RegisterUserHandler(context, new FakePasswordService());
+                var handler = new RegisterUserHandler(context, new FakePasswordService(), new InMemoryRegistrationQuotaService());
                 var command = new RegisterUserCommand
                 {
                     Email = $"user{index}-{rid}@example.com",
@@ -124,6 +124,47 @@ public class ConcurrentRegistrationTests : IAsyncLifetime
 
         var successCount = results.Count(r => r.IsSuccess);
         Assert.Equal(concurrentCount, successCount);
+    }
+
+    /// <summary>
+    /// M5/§4.1：唯一约束失败的注册请求不消耗 REG_IP 配额（防 NAT 出口 IP 配额 DoS）——
+    /// 配额 3 = 成功 A + C + D；若失败的 B 计数，D 将被粗检拒绝
+    /// </summary>
+    [Fact]
+    public async Task FailedRegistration_ShouldNotConsumeIpQuota()
+    {
+        const string ip = "172.16.0.50";
+        var quota = new InMemoryRegistrationQuotaService(limit: 3);
+
+        async Task<RegisterUserResult> RegisterAsync(string username, string email)
+        {
+            using var context = CreateContext();
+            var handler = new RegisterUserHandler(context, new FakePasswordService(), quota);
+            return await handler.HandleAsync(new RegisterUserCommand
+            {
+                Username = username,
+                Email = email,
+                Password = "Password123!",
+                ClientIp = ip
+            });
+        }
+
+        var unique = Guid.NewGuid().ToString("N")[..8];
+
+        var a = await RegisterAsync($"qok_{unique}", $"qok_{unique}@example.com");
+        Assert.True(a.IsSuccess);
+
+        // 同邮箱冲突 → 落库失败（1062），必须发生在粗检之后、计数之前
+        var b = await RegisterAsync($"qdup_{unique}", $"qok_{unique}@example.com");
+        Assert.False(b.IsSuccess);
+        Assert.Equal("邮箱已被注册", b.ErrorMessage);
+
+        var c = await RegisterAsync($"qc_{unique}", $"qc_{unique}@example.com");
+        Assert.True(c.IsSuccess);
+
+        // 关键断言：B 未占用配额，第 3 个成功注册仍被放行
+        var d = await RegisterAsync($"qd_{unique}", $"qd_{unique}@example.com");
+        Assert.True(d.IsSuccess);
     }
 }
 
