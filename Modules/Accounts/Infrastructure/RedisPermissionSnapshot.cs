@@ -13,7 +13,8 @@ public sealed class RedisPermissionSnapshot : IPermissionSnapshot
 {
     private readonly IConnectionMultiplexer _redis;
     private readonly AuthDbContext _db;
-    private readonly TimeSpan _cacheExpiration = TimeSpan.FromMinutes(30);
+    // V5 §3.4 冻结 TTL：PERM:{uid} 60s（T3-012）
+    private readonly TimeSpan _cacheExpiration = TimeSpan.FromSeconds(60);
     private readonly int _database;
 
     public RedisPermissionSnapshot(IConnectionMultiplexer redis, AuthDbContext db, int database = -1)
