@@ -166,6 +166,51 @@ public class ConcurrentRegistrationTests : IAsyncLifetime
         var d = await RegisterAsync($"qd_{unique}", $"qd_{unique}@example.com");
         Assert.True(d.IsSuccess);
     }
+
+    /// <summary>
+    /// M4/T3-013：User+Player 单次保存原子落库——用户名唯一约束冲突时
+    /// 不得留下孤儿 User（否则邮箱被无主占用、不可自愈）
+    /// </summary>
+    [Fact]
+    public async Task FailedRegistration_DuplicateUsername_ShouldNotLeaveOrphanUser()
+    {
+        var unique = Guid.NewGuid().ToString("N")[..8];
+        var conflictEmail = $"orphan_{unique}@example.com";
+
+        using (var seedContext = CreateContext())
+        {
+            var seedHandler = new RegisterUserHandler(seedContext, new FakePasswordService(), new InMemoryRegistrationQuotaService());
+            var seed = await seedHandler.HandleAsync(new RegisterUserCommand
+            {
+                Username = $"dup_{unique}",
+                Email = $"dup_{unique}@example.com",
+                Password = "Password123!",
+                ClientIp = "127.0.0.1"
+            });
+            Assert.True(seed.IsSuccess);
+        }
+
+        // 同名不同邮箱 → 1062：User+Player 必须同一事务整体回滚
+        using (var conflictContext = CreateContext())
+        {
+            var handler = new RegisterUserHandler(conflictContext, new FakePasswordService(), new InMemoryRegistrationQuotaService());
+            var result = await handler.HandleAsync(new RegisterUserCommand
+            {
+                Username = $"dup_{unique}",
+                Email = conflictEmail,
+                Password = "Password123!",
+                ClientIp = "127.0.0.1"
+            });
+            Assert.False(result.IsSuccess);
+            Assert.Equal("用户名已被占用", result.ErrorMessage);
+        }
+
+        using (var verifyContext = CreateContext())
+        {
+            var orphanExists = await verifyContext.Users.AnyAsync(u => u.Email == conflictEmail);
+            Assert.False(orphanExists, "用户名冲突后不得留下孤儿 User（邮箱被无主占用）");
+        }
+    }
 }
 
 internal class FakePasswordService : IPasswordService
