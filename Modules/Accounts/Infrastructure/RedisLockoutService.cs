@@ -4,7 +4,7 @@ namespace FantasyTown.Auth.Modules.Accounts.Infrastructure;
 
 /// <summary>
 /// Redis 锁定服务实现（V5 §6.6 冻结键空间）
-/// LOCKOUT:{uid}     — 账户锁定（count=触发次数，TTL=锁定时长；跨通道共享）
+/// LOCKOUT:{uid}     — 账户锁定（count=触发次数，TTL=指数退避 15→30→60min 封顶；跨通道共享）
 /// FAIL_EP:{email}:{ip} — 同 IP 复合键 ZSET 滑动窗 15min（LOCKOUT 触发依据，阈值 5）
 /// FAIL_ACCT:{email} — 账户全局 ZSET 滑动窗 15min（仅审计/告警，不触发锁定）
 /// H4：记录失败的"写入/修剪/过期/阈值判定/锁定"由单 Lua 脚本原子执行
@@ -46,8 +46,10 @@ redis.call('EXPIRE', @acctKey, @windowSeconds)
 local count = redis.call('ZCARD', @epKey)
 local triggered = 0
 if count >= tonumber(@maxAttempts) then
-    redis.call('INCR', @lockoutKey)
-    redis.call('EXPIRE', @lockoutKey, @lockoutTtlSeconds)
+    local n = redis.call('INCR', @lockoutKey)
+    local ttl = tonumber(@backoffBaseSeconds) * 2 ^ (n - 1)
+    if ttl > tonumber(@backoffCapSeconds) then ttl = tonumber(@backoffCapSeconds) end
+    redis.call('EXPIRE', @lockoutKey, ttl)
     triggered = 1
 end
 return {count, triggered}
@@ -93,7 +95,8 @@ return 1
             acctMember = (RedisValue)$"{now}:{Guid.NewGuid():N}",
             windowSeconds = (RedisValue)(long)_window.TotalSeconds,
             maxAttempts = (RedisValue)_maxAttempts,
-            lockoutTtlSeconds = (RedisValue)(long)_lockoutDuration.TotalSeconds
+            backoffBaseSeconds = (RedisValue)(long)_lockoutDuration.TotalSeconds,
+            backoffCapSeconds = (RedisValue)(long)(_lockoutDuration.TotalSeconds * 4)
         });
         // 脚本契约：恒返回 {count, triggered}
         var result = (RedisResult[])raw!;
@@ -185,10 +188,17 @@ public sealed class InMemoryLockoutService : ILockoutService
         if (triggered)
         {
             var nextCount = _lockouts.TryGetValue(uid, out var prev) ? prev.Count + 1 : 1;
-            _lockouts[uid] = (nextCount, DateTime.UtcNow.Add(_lockoutDuration));
+            _lockouts[uid] = (nextCount, DateTime.UtcNow.Add(Backoff(nextCount)));
         }
 
         return Task.FromResult(new LockoutFailureResult(epCount, triggered));
+    }
+
+    /// <summary>T3-006 指数退避：base → 2base → 4base 封顶（默认 15→30→60min，§6.6/§8）</summary>
+    private TimeSpan Backoff(int triggerCount)
+    {
+        var factor = Math.Min(Math.Pow(2, triggerCount - 1), 4);
+        return TimeSpan.FromMinutes(_lockoutDuration.TotalMinutes * factor);
     }
 
     public Task RecordUnknownAccountFailureAsync(string identifier, CancellationToken cancellationToken = default)

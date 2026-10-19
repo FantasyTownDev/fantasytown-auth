@@ -21,7 +21,7 @@ public interface ILockoutService
     /// <summary>
     /// 记录已存在账户的一次认证失败：
     /// FAIL_EP:{email}:{ip} 同 IP 复合键滑动窗 + FAIL_ACCT:{email} 审计维度；
-    /// 同 IP 窗口内达到阈值时触发 LOCKOUT:{uid}（退避升级见 Step 0-c）
+    /// 同 IP 窗口内达到阈值时触发 LOCKOUT:{uid}，TTL 按触发次数指数退避 15→30→60min 封顶（T3-006）
     /// </summary>
     Task<LockoutFailureResult> RecordFailureAsync(int uid, string email, string ip, CancellationToken cancellationToken = default);
 
