@@ -1,3 +1,4 @@
+using System.Net;
 using FantasyTown.Auth.Middleware;
 using FantasyTown.Auth.Modules.Accounts.Infrastructure;
 using FantasyTown.Auth.Modules.Shared;
@@ -10,10 +11,9 @@ using Microsoft.AspNetCore.DataProtection.StackExchangeRedis;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
-using System.Net;
-using StackExchange.Redis;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
+using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 

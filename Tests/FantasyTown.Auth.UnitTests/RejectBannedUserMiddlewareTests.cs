@@ -1,8 +1,8 @@
+using System.Security.Claims;
 using FantasyTown.Auth.Middleware;
 using FantasyTown.Auth.Modules.Accounts.Domain;
 using FantasyTown.Auth.Modules.Accounts.Infrastructure;
 using Microsoft.AspNetCore.Http;
-using System.Security.Claims;
 
 namespace FantasyTown.Auth.UnitTests;
 

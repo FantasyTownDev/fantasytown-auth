@@ -1,7 +1,7 @@
-using FantasyTown.Auth.Modules.Yggdrasil.Authserver;
-using FantasyTown.Auth.Modules.Yggdrasil.Protocol;
 using FantasyTown.Auth.Modules.Accounts.Domain;
 using FantasyTown.Auth.Modules.Accounts.Infrastructure;
+using FantasyTown.Auth.Modules.Yggdrasil.Authserver;
+using FantasyTown.Auth.Modules.Yggdrasil.Protocol;
 using FantasyTown.Auth.Persistence;
 using Microsoft.EntityFrameworkCore;
 

@@ -1,6 +1,6 @@
+using System.Security.Cryptography;
 using Isopoh.Cryptography.Argon2;
 using Isopoh.Cryptography.SecureArray;
-using System.Security.Cryptography;
 
 namespace FantasyTown.Auth.Modules.Accounts.Infrastructure;
 
