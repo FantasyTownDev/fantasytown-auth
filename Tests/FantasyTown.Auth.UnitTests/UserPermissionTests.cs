@@ -12,13 +12,13 @@ public class UserPermissionTests
     [InlineData(UserPermission.PlatformAdmin, true)]
     public void IsModerator_ShouldReturnCorrectValue(UserPermission permission, bool expected)
     {
-        var result = permission is UserPermission.ServerModerator 
-            or UserPermission.ServerOwner 
+        var result = permission is UserPermission.ServerModerator
+            or UserPermission.ServerOwner
             or UserPermission.PlatformAdmin;
-        
+
         Assert.Equal(expected, result);
     }
-    
+
     [Theory]
     [InlineData(UserPermission.NormalPlayer, false)]
     [InlineData(UserPermission.ServerModerator, false)]
@@ -27,10 +27,10 @@ public class UserPermissionTests
     public void IsOwner_ShouldReturnCorrectValue(UserPermission permission, bool expected)
     {
         var result = permission is UserPermission.ServerOwner or UserPermission.PlatformAdmin;
-        
+
         Assert.Equal(expected, result);
     }
-    
+
     [Theory]
     [InlineData(UserPermission.NormalPlayer, false)]
     [InlineData(UserPermission.ServerModerator, false)]
@@ -39,7 +39,7 @@ public class UserPermissionTests
     public void IsPlatform_ShouldReturnCorrectValue(UserPermission permission, bool expected)
     {
         var result = permission == UserPermission.PlatformAdmin;
-        
+
         Assert.Equal(expected, result);
     }
 }

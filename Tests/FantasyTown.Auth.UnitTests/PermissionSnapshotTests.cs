@@ -56,7 +56,7 @@ public class PermissionSnapshotTests
     public async Task SetAsync_OverwritesExistingSnapshot()
     {
         var snapshot = new InMemoryPermissionSnapshot();
-        
+
         await snapshot.SetAsync(1, new PermissionSnapshot
         {
             Permission = UserPermission.NormalPlayer,

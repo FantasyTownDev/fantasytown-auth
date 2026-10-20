@@ -28,7 +28,7 @@ public sealed class RedisPermissionSnapshot : IPermissionSnapshot
     {
         var db = _redis.GetDatabase(_database);
         var key = $"PERM:{uid}";
-        
+
         var cached = await db.StringGetAsync(key);
         if (cached.HasValue)
         {
@@ -72,7 +72,7 @@ public sealed class RedisPermissionSnapshot : IPermissionSnapshot
     {
         var db = _redis.GetDatabase(_database);
         var key = $"PERM:{uid}";
-        
+
         await db.StringSetAsync(key, JsonSerializer.Serialize(snapshot), _cacheExpiration);
     }
 
@@ -80,7 +80,7 @@ public sealed class RedisPermissionSnapshot : IPermissionSnapshot
     {
         var db = _redis.GetDatabase(_database);
         var key = $"PERM:{uid}";
-        
+
         await db.KeyDeleteAsync(key);
     }
 }

@@ -36,15 +36,15 @@ public static class PermissionRules
     {
         // 平台管理员可以管理所有人
         if (actorRole == UserPermission.PlatformAdmin) return true;
-        
+
         // 服主可以管理协管和普通玩家
         if (actorRole == UserPermission.ServerOwner)
             return targetRole is UserPermission.ServerModerator or UserPermission.NormalPlayer;
-        
+
         // 协管只能管理普通玩家
         if (actorRole == UserPermission.ServerModerator)
             return targetRole == UserPermission.NormalPlayer;
-        
+
         // 普通玩家不能管理任何人
         return false;
     }

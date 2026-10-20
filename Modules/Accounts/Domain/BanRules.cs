@@ -16,10 +16,10 @@ public static class BanRules
     {
         // 未激活的封禁记录不生效
         if (!isActive) return false;
-        
+
         // 激活且无截止时间 = 永久封禁
         if (bannedUntil is null) return true;
-        
+
         // 激活且截止时间在未来 = 临时封禁未到期
         return bannedUntil.Value > nowUtc;
     }

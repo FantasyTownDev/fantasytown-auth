@@ -36,22 +36,22 @@ public sealed record PermissionSnapshot
     /// 用户权限
     /// </summary>
     public UserPermission Permission { get; init; }
-    
+
     /// <summary>
     /// 是否被封禁
     /// </summary>
     public bool IsBanned { get; init; }
-    
+
     /// <summary>
     /// 封禁截止时间（null 表示永久封禁）
     /// </summary>
     public DateTime? BannedUntil { get; init; }
-    
+
     /// <summary>
     /// 封禁原因
     /// </summary>
     public string? BannedReason { get; init; }
-    
+
     /// <summary>
     /// 快照创建时间
     /// </summary>

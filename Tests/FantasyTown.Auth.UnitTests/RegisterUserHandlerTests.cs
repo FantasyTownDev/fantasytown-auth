@@ -14,7 +14,7 @@ public class RegisterUserHandlerTests
         var options = new DbContextOptionsBuilder<AuthDbContext>()
             .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
             .Options;
-        
+
         return new AuthDbContext(options);
     }
 
