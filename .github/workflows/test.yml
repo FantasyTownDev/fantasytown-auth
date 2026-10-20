@@ -15,6 +15,16 @@ jobs:
   unit-tests:
     name: Unit Tests
     runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
     steps:
       - uses: actions/checkout@v4
 
@@ -30,7 +40,7 @@ jobs:
         run: dotnet build --no-restore
 
       - name: Unit Tests
-        run: dotnet test Tests/FantasyTown.Auth.UnitTests --no-build --verbosity normal --logger "trx;LogFileName=unit-results.trx"
+        run: dotnet test Tests/FantasyTown.Auth.UnitTests --verbosity normal --logger "trx;LogFileName=unit-results.trx"
 
       - name: Upload Test Results
         if: always()

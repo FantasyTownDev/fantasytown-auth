@@ -10,6 +10,16 @@ jobs:
   unit-tests:
     name: Unit Tests
     runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
     steps:
       - uses: actions/checkout@v4
 
@@ -25,7 +35,7 @@ jobs:
         run: dotnet build --no-restore
 
       - name: Unit Tests
-        run: dotnet test Tests/FantasyTown.Auth.UnitTests --no-build --verbosity normal --logger "trx;LogFileName=unit-results.trx"
+        run: dotnet test Tests/FantasyTown.Auth.UnitTests --verbosity normal --logger "trx;LogFileName=unit-results.trx"
 
       - name: Upload Unit Test Results
         if: always()
@@ -54,7 +64,7 @@ jobs:
         run: dotnet build --no-restore
 
       - name: Contract Tests
-        run: dotnet test Tests/FantasyTown.Auth.ContractTests --no-build --verbosity normal --logger "trx;LogFileName=contract-results.trx"
+        run: dotnet test Tests/FantasyTown.Auth.ContractTests --verbosity normal --logger "trx;LogFileName=contract-results.trx"
 
       - name: Upload Contract Test Results
         if: always()
@@ -81,6 +91,15 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
     steps:
       - uses: actions/checkout@v4
 
@@ -96,7 +115,7 @@ jobs:
         run: dotnet build --no-restore
 
       - name: Integration Tests
-        run: dotnet test Tests/FantasyTown.Auth.IntegrationTests --no-build --verbosity normal --logger "trx;LogFileName=integration-results.trx"
+        run: dotnet test Tests/FantasyTown.Auth.IntegrationTests --verbosity normal --logger "trx;LogFileName=integration-results.trx"
         env:
           IntegrationTests__ConnectionString: "Server=localhost;Port=3306;Database=fantasytown_integration_test;User=root;Password=root;"
 
