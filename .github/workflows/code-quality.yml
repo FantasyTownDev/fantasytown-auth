@@ -22,11 +22,18 @@ jobs:
           dotnet-version: '10.0.x'
 
       - name: Restore
-        run: dotnet restore
+        run: |
+          dotnet restore
+          dotnet restore Tests/FantasyTown.Auth.UnitTests
+          dotnet restore Tests/FantasyTown.Auth.ContractTests
+          dotnet restore Tests/FantasyTown.Auth.IntegrationTests
 
       - name: Build
         run: dotnet build --no-restore
 
       - name: Format Check
-        run: dotnet format --verify-no-changes --no-restore
-        continue-on-error: true
+        run: |
+          dotnet format --verify-no-changes --no-restore
+          dotnet format Tests/FantasyTown.Auth.UnitTests/FantasyTown.Auth.UnitTests.csproj --verify-no-changes --no-restore
+          dotnet format Tests/FantasyTown.Auth.ContractTests/FantasyTown.Auth.ContractTests.csproj --verify-no-changes --no-restore
+          dotnet format Tests/FantasyTown.Auth.IntegrationTests/FantasyTown.Auth.IntegrationTests.csproj --verify-no-changes --no-restore
