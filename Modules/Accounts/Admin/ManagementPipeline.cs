@@ -104,32 +104,32 @@ public sealed class ManagementPipeline
         {
             case ManagementMatrix.OwnerUser:
             case ManagementMatrix.ClearLockout:
-            {
-                var evaluation = request.Matrix == ManagementMatrix.OwnerUser
-                    ? await AdminAuthorization.EvaluateAsync(
-                        _db, request.ActorUid, request.TargetUid, request.Operation, cancellationToken)
-                    : await ClearLockoutAuthorization.EvaluateAsync(
-                        _db, request.ActorUid, request.TargetUid, request.Operation, cancellationToken);
-                denial = evaluation.Denial;
-                actor = evaluation.Actor;
-                break;
-            }
+                {
+                    var evaluation = request.Matrix == ManagementMatrix.OwnerUser
+                        ? await AdminAuthorization.EvaluateAsync(
+                            _db, request.ActorUid, request.TargetUid, request.Operation, cancellationToken)
+                        : await ClearLockoutAuthorization.EvaluateAsync(
+                            _db, request.ActorUid, request.TargetUid, request.Operation, cancellationToken);
+                    denial = evaluation.Denial;
+                    actor = evaluation.Actor;
+                    break;
+                }
             case ManagementMatrix.PlayerModerator:
-            {
-                var evaluation = await PlayerAuthorization.EvaluateModeratorTierAsync(
-                    _db, request.ActorUid, request.TargetPid ?? 0, request.Operation, cancellationToken);
-                denial = evaluation.Denial;
-                actor = evaluation.Actor;
-                break;
-            }
+                {
+                    var evaluation = await PlayerAuthorization.EvaluateModeratorTierAsync(
+                        _db, request.ActorUid, request.TargetPid ?? 0, request.Operation, cancellationToken);
+                    denial = evaluation.Denial;
+                    actor = evaluation.Actor;
+                    break;
+                }
             case ManagementMatrix.PlayerOwner:
-            {
-                var evaluation = await PlayerAuthorization.EvaluateOwnerTierAsync(
-                    _db, request.ActorUid, request.TargetPid ?? 0, request.Operation, cancellationToken);
-                denial = evaluation.Denial;
-                actor = evaluation.Actor;
-                break;
-            }
+                {
+                    var evaluation = await PlayerAuthorization.EvaluateOwnerTierAsync(
+                        _db, request.ActorUid, request.TargetPid ?? 0, request.Operation, cancellationToken);
+                    denial = evaluation.Denial;
+                    actor = evaluation.Actor;
+                    break;
+                }
             default:
                 throw new ArgumentOutOfRangeException(
                     nameof(request), request.Matrix, "未实现的管理矩阵档位");
