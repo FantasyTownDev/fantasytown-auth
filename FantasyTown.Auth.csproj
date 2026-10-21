@@ -27,9 +27,6 @@
     <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="9.0.0" />
     <PackageReference Include="AspNetCore.HealthChecks.Redis" Version="9.0.0" />
     <PackageReference Include="Isopoh.Cryptography.Argon2" Version="2.0.0" />
-
-    <PackageReference Include="OpenTelemetry.Api" Version="1.18.0" />
-    <PackageReference Include="OpenTelemetry" Version="1.18.0" />
   </ItemGroup>
 
 </Project>
