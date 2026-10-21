@@ -40,7 +40,7 @@ public sealed class RegisterUserHandler
         }
 
         // 3. 验证邮箱格式（如果提供）
-        if (!string.IsNullOrEmpty(command.Email) && !IsValidEmail(command.Email))
+        if (!string.IsNullOrEmpty(command.Email) && !EmailAddress.IsValid(command.Email))
         {
             return RegisterUserResult.Failure("邮箱格式无效");
         }
@@ -158,14 +158,6 @@ public sealed class RegisterUserHandler
         // 密码规则：至少8个字符
         if (string.IsNullOrWhiteSpace(password)) return false;
         return password.Length >= 8;
-    }
-
-    private static bool IsValidEmail(string email)
-    {
-        // 简单邮箱验证：必须包含 @ 且 @ 前后都有内容
-        if (string.IsNullOrWhiteSpace(email)) return false;
-        var atIndex = email.IndexOf('@');
-        return atIndex > 0 && atIndex < email.Length - 1 && email.Contains('.');
     }
 
     /// <summary>
