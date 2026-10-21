@@ -2,6 +2,7 @@ using System.Net;
 using FantasyTown.Auth.Middleware;
 using FantasyTown.Auth.Modules.Accounts.Admin;
 using FantasyTown.Auth.Modules.Accounts.Application;
+using FantasyTown.Auth.Modules.Accounts.Application.Commands;
 using FantasyTown.Auth.Modules.Accounts.Infrastructure;
 using FantasyTown.Auth.Modules.Shared;
 using FantasyTown.Auth.Modules.Yggdrasil.Authserver;
@@ -111,6 +112,18 @@ builder.Services.AddScoped<IRegistrationQuotaService>(sp =>
 // 管理管线（V5 §7.1：/admin 页面 HTTP 层闸门——越权矩阵 → ★二次确认；
 // Antiforgery 与策略阶段由框架承担）
 builder.Services.AddScoped<ManagementPipeline>();
+// 管理命令处理器（§7.3 页面阶段五消费；handler 内闸门为纵深防御，§7.1 原则 3）
+builder.Services.AddScoped<BanUserHandler>();
+builder.Services.AddScoped<UnbanUserHandler>();
+builder.Services.AddScoped<ChangeUserPermissionHandler>();
+builder.Services.AddScoped<ForceResetPasswordHandler>();
+builder.Services.AddScoped<ChangeUserEmailHandler>();
+builder.Services.AddScoped<SoftDeleteUserHandler>();
+builder.Services.AddScoped<ClearUserLockoutHandler>();
+builder.Services.AddScoped<BanPlayerHandler>();
+builder.Services.AddScoped<UnbanPlayerHandler>();
+builder.Services.AddScoped<ResetPlayerTextureHandler>();
+builder.Services.AddScoped<RenamePlayerHandler>();
 
 // 4.1 反代信任与客户端 IP（V5 §8：仅信任显式配置的 KnownProxies；未配置时保持直连 RemoteIpAddress 语义）
 builder.Services.AddHttpContextAccessor();
