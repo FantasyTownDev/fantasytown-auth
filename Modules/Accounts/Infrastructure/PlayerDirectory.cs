@@ -65,7 +65,8 @@ public sealed class PlayerDirectory : IPlayerDirectory
                 Uid = u.Uid,
                 Email = u.Email,
                 PasswordHash = u.Password,
-                Verified = u.Verified
+                Verified = u.Verified,
+                Permission = (byte)u.Permission
             })
             .FirstOrDefaultAsync(cancellationToken);
     }

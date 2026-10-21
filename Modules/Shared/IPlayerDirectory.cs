@@ -57,6 +57,10 @@ public sealed record AccountInfo
 
     /// <summary>是否已验证邮箱</summary>
     public required bool Verified { get; init; }
+
+    /// <summary>权限级别原始字节（UserPermission 枚举值）——仅作令牌签发的元数据携带；
+    /// 授权判定一律走 PERM 快照，不经此面</summary>
+    public required byte Permission { get; init; }
 }
 
 /// <summary>

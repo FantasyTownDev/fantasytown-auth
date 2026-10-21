@@ -29,7 +29,7 @@ public class AuthenticateHandlerTests : IDisposable
 
         var yggOptions = new YggOptions();
         var concurrencyLimiter = new AuthConcurrencyLimiter();
-        _handler = new AuthenticateHandler(_db, _passwordService, _permissionSnapshot, _lockoutService, _tokenService, yggOptions, concurrencyLimiter);
+        _handler = new AuthenticateHandler(new TestPlayerDirectory(_db), _passwordService, _permissionSnapshot, _lockoutService, _tokenService, yggOptions, concurrencyLimiter);
     }
 
     public void Dispose()
