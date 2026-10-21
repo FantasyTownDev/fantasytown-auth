@@ -212,6 +212,74 @@ public class ConcurrentRegistrationTests : IAsyncLifetime
             Assert.False(orphanExists, "用户名冲突后不得留下孤儿 User（邮箱被无主占用）");
         }
     }
+
+    /// <summary>
+    /// 审计 C1 门禁（真实 MariaDB）：并发种子邮箱注册恰好产生一个 ServerOwner，
+    /// 并落一条 actor=NULL 的 bootstrap=seed 审计。
+    /// "仅生效一次"语义是库全局的：测试前后各清理一次 ServerOwner 行，保证可重复运行
+    /// </summary>
+    [Fact]
+    public async Task ConcurrentSeedEmailRegistration_ExactlyOneOwner()
+    {
+        var rid = Guid.NewGuid().ToString("N")[..8];
+        var seedEmail = $"seed-{rid}@example.com";
+        var siteOptions = new SiteOptions { SeedOwnerEmail = seedEmail };
+        const int concurrentCount = 8;
+
+        // 前置清理：移除历史 ServerOwner（种子判定基于"库中无任何 ServerOwner"）
+        using (var cleanup = CreateContext())
+        {
+            var legacyOwners = await cleanup.Users.IgnoreQueryFilters()
+                .Where(u => u.Permission == UserPermission.ServerOwner)
+                .ToListAsync();
+            cleanup.Users.RemoveRange(legacyOwners);
+            await cleanup.SaveChangesAsync();
+        }
+
+        var results = new ConcurrentBag<RegisterUserResult>();
+        var tasks = new List<Task>();
+        for (int i = 0; i < concurrentCount; i++)
+        {
+            var index = i;
+            tasks.Add(Task.Run(async () =>
+            {
+                using var context = CreateContext();
+                var handler = new RegisterUserHandler(context, new FakePasswordService(), new InMemoryRegistrationQuotaService(), siteOptions, new MySqlAdvisoryOwnerClaimLock(context));
+                results.Add(await handler.HandleAsync(new RegisterUserCommand
+                {
+                    Username = $"sd{index}_{rid}",
+                    Email = seedEmail,
+                    Password = "Password123!",
+                    ClientIp = $"10.98.0.{index}"
+                }));
+            }));
+        }
+
+        await Task.WhenAll(tasks);
+
+        // 同一种子邮箱：email UNIQUE 串行化落库，恰一个成功（且必须是被提权的那个）
+        Assert.Equal(1, results.Count(r => r.IsSuccess));
+
+        using var verify = CreateContext();
+        var owners = await verify.Users.IgnoreQueryFilters()
+            .Where(u => u.Permission == UserPermission.ServerOwner)
+            .ToListAsync();
+        Assert.Single(owners);
+        Assert.Equal(seedEmail, owners[0].Email);
+
+        var audit = await verify.AuthLogs.FirstOrDefaultAsync(l =>
+            l.Action == "permission-change" && l.Context == "bootstrap=seed" && l.SubjectId == owners[0].Uid);
+        Assert.NotNull(audit);
+        Assert.Null(audit.ActorId);
+
+        // 后置清理：移除本次产生的服主与审计，恢复库状态
+        verify.Users.Remove(owners[0]);
+        if (audit != null)
+        {
+            verify.AuthLogs.Remove(audit);
+        }
+        await verify.SaveChangesAsync();
+    }
 }
 
 internal class FakePasswordService : IPasswordService
