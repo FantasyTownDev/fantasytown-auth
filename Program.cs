@@ -195,6 +195,29 @@ builder.Services.AddRazorPages(o =>
     // [Authorize(Policy = AdminPolicies.Owner)] 收紧（见 §7.3 路由表）
     o.Conventions.AuthorizeFolder("/Admin", "moderator");
     o.Conventions.Add(new AdminGateConvention());
+
+    // §7.3 嵌套路由表：@page 模板会追加到文件路径之后（/{pid}/ban 变成 /Ban/{pid}），
+    // 故对写操作端点与详情页经 AddPageRoute 显式挂接设计路由（URL 大小写不敏感）
+    var adminRoutes = new (string Page, string Route)[]
+    {
+        ("/Admin/Players/Detail", "/Admin/Players/{pid:int}"),
+        ("/Admin/Players/Ban", "/Admin/Players/{pid:int}/Ban"),
+        ("/Admin/Players/Unban", "/Admin/Players/{pid:int}/Unban"),
+        ("/Admin/Players/ResetTexture", "/Admin/Players/{pid:int}/ResetTexture"),
+        ("/Admin/Players/Rename", "/Admin/Players/{pid:int}/Rename"),
+        ("/Admin/Users/Detail", "/Admin/Users/{uid:int}"),
+        ("/Admin/Users/Ban", "/Admin/Users/{uid:int}/Ban"),
+        ("/Admin/Users/Unban", "/Admin/Users/{uid:int}/Unban"),
+        ("/Admin/Users/Permission", "/Admin/Users/{uid:int}/Permission"),
+        ("/Admin/Users/ForceResetPassword", "/Admin/Users/{uid:int}/ForceResetPassword"),
+        ("/Admin/Users/Email", "/Admin/Users/{uid:int}/Email"),
+        ("/Admin/Users/Delete", "/Admin/Users/{uid:int}/Delete"),
+        ("/Admin/Lockouts/Clear", "/Admin/Lockouts/{uid:int}/Clear"),
+    };
+    foreach (var (page, route) in adminRoutes)
+    {
+        o.Conventions.AddPageRoute(page, route);
+    }
 });
 
 var app = builder.Build();
