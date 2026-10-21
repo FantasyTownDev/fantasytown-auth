@@ -6,7 +6,7 @@ namespace FantasyTown.Auth.Modules.Accounts.Application.Commands;
 
 /// <summary>
 /// 软删除用户处理器
-/// 行为：is_deleted=true + 释放角色名占位 + 审计
+/// 行为：授权判定（审计 H1）→ is_deleted=true + 释放角色名占位 + 审计
 /// 角色名改写为 deleted_{pid}_{timestamp}，释放 UNIQUE 约束
 /// </summary>
 public sealed class SoftDeleteUserHandler
@@ -29,6 +29,30 @@ public sealed class SoftDeleteUserHandler
 
         if (user == null)
             return SoftDeleteUserResult.Failure("用户不存在");
+
+        // 审计 H1：软删是 owner 级管理操作（V5 §7.3）——操作者须为 owner 层
+        // （白名单，禁 >=），且同时满足 ManagementGuard.CanManage 与 NotSelf。
+        // handler 内校验是纵深防御；Step 3 管线在 HTTP 层另有越权矩阵闸门。
+        // actor 走全局过滤器查询：软删账户即刻丧失一切管理能力
+        var actor = await _db.Users
+            .FirstOrDefaultAsync(u => u.Uid == command.ActorUid, cancellationToken);
+
+        if (actor == null
+            || actor.Permission is not (UserPermission.ServerOwner or UserPermission.PlatformAdmin)
+            || !ManagementGuard.CanManage(actor.Permission, user.Permission)
+            || !ManagementGuard.NotSelf(command.ActorUid, command.TargetUid))
+        {
+            _db.AuthLogs.Add(new AuthLog
+            {
+                Action = "admin-denied",
+                ActorId = command.ActorUid,
+                SubjectId = command.TargetUid,
+                Context = "soft-delete",
+                CreatedAt = DateTime.UtcNow
+            });
+            await _db.SaveChangesAsync(cancellationToken);
+            return SoftDeleteUserResult.Failure("无权操作");
+        }
 
         if (user.IsDeleted)
             return SoftDeleteUserResult.Failure("用户已软删除");
