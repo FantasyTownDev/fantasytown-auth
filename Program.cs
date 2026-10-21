@@ -99,6 +99,8 @@ builder.Services.AddScoped<IPasswordService, Argon2PasswordService>();
 // 时钟抽象（策略谓词与封禁时间谓词取当前 UTC，支持确定性测试）
 builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.AddScoped<IPermissionSnapshot, RedisPermissionSnapshot>();
+// H5：Yggdrasil 经 IPlayerDirectory 访问账号数据（模块纪律边界）
+builder.Services.AddScoped<IPlayerDirectory, PlayerDirectory>();
 builder.Services.AddScoped<ILockoutService>(sp => new RedisLockoutService(
     sp.GetRequiredService<IConnectionMultiplexer>(),
     auditDb: sp.GetRequiredService<AuthDbContext>()));

@@ -85,7 +85,7 @@ public sealed record PlayerInfo
     /// null = 永久封禁，非 null = 临时封禁到期时间。
     /// R2 约束保证该记录恒唯一。
     /// </summary>
-    DateTimeOffset? BannedUntil { get; init; }
+    public DateTimeOffset? BannedUntil { get; init; }
 
     /// <summary>皮肤纹理 ID（null = 无皮肤）</summary>
     public int? TidSkin { get; init; }
