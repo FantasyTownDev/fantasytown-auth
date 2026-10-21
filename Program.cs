@@ -1,5 +1,6 @@
 using System.Net;
 using FantasyTown.Auth.Middleware;
+using FantasyTown.Auth.Modules.Accounts.Admin;
 using FantasyTown.Auth.Modules.Accounts.Application;
 using FantasyTown.Auth.Modules.Accounts.Infrastructure;
 using FantasyTown.Auth.Modules.Shared;
@@ -107,6 +108,9 @@ builder.Services.AddScoped<IRegistrationQuotaService>(sp =>
         sp.GetRequiredService<IConnectionMultiplexer>(),
         sp.GetRequiredService<SiteOptions>(),
         sp.GetRequiredService<ILogger<RedisRegistrationQuotaService>>()));
+// 管理管线（V5 §7.1：/admin 页面 HTTP 层闸门——越权矩阵 → ★二次确认；
+// Antiforgery 与策略阶段由框架承担）
+builder.Services.AddScoped<ManagementPipeline>();
 
 // 4.1 反代信任与客户端 IP（V5 §8：仅信任显式配置的 KnownProxies；未配置时保持直连 RemoteIpAddress 语义）
 builder.Services.AddHttpContextAccessor();
