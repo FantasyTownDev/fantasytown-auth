@@ -64,8 +64,9 @@ public sealed class MySqlAdvisoryOwnerClaimLock : IOwnerClaimLock
         command.Parameters.Add(timeoutParam);
 
         // GET_LOCK 返回 1=获锁 / 0=超时 / NULL=错误
+        // （驱动可能映射为 Int32 或 Int64，统一按数值比较）
         var result = await command.ExecuteScalarAsync(cancellationToken);
-        return result is long value && value == 1;
+        return result is not null && Convert.ToInt32(result) == 1;
     }
 
     private static async Task ReleaseAsync(DbConnection connection)
