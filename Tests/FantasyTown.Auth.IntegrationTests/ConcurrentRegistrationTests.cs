@@ -22,7 +22,7 @@ public class ConcurrentRegistrationTests : IAsyncLifetime
     {
         if (DockerHelper.IsAvailable())
         {
-            var container = new Testcontainers.MySql.MySqlBuilder()
+            var container = new Testcontainers.MySql.MySqlBuilder("mysql:8.4")
                 .WithDatabase("fantasytown_test")
                 .WithUsername("test")
                 .WithPassword("test")
