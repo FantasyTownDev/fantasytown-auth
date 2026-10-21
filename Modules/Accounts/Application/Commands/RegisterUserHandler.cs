@@ -38,7 +38,7 @@ public sealed class RegisterUserHandler
     public async Task<RegisterUserResult> HandleAsync(RegisterUserCommand command, CancellationToken cancellationToken = default)
     {
         // 1. 验证用户名格式
-        if (!IsValidUsername(command.Username))
+        if (!PlayerNameRules.IsValid(command.Username))
         {
             return RegisterUserResult.Failure("用户名格式无效");
         }
@@ -191,14 +191,6 @@ public sealed class RegisterUserHandler
             }
         }
         return false;
-    }
-
-    private static bool IsValidUsername(string username)
-    {
-        // 用户名规则：3-16个字符，字母数字下划线
-        if (string.IsNullOrWhiteSpace(username)) return false;
-        if (username.Length < 3 || username.Length > 16) return false;
-        return username.All(c => char.IsLetterOrDigit(c) || c == '_');
     }
 
     private static bool IsValidPassword(string password)
