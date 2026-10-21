@@ -9,6 +9,7 @@ namespace FantasyTown.Auth.IntegrationTests;
 /// 玩家改名命令集成测试（DB UNIQUE 冲突捕获路径，防错 #16）。
 /// </summary>
 [Trait("Category", "Integration")]
+[Collection("MariaDB")]
 public class RenamePlayerIntegrationTests : IAsyncLifetime
 {
     private string _connectionString = null!;

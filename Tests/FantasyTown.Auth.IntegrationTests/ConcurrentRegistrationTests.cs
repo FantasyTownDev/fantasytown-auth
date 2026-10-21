@@ -14,6 +14,7 @@ namespace FantasyTown.Auth.IntegrationTests;
 /// CI（有 Docker）：自动使用 Testcontainers 创建 MySQL 容器
 /// </summary>
 [Trait("Category", "Integration")]
+[Collection("MariaDB")]
 public class ConcurrentRegistrationTests : IAsyncLifetime
 {
     private string _connectionString = null!;
@@ -261,8 +262,10 @@ public class ConcurrentRegistrationTests : IAsyncLifetime
         Assert.Equal(1, results.Count(r => r.IsSuccess));
 
         using var verify = CreateContext();
+        // 按种子邮箱收窄：共享本地库可能残留其他测试的服主种子；
+        // "提权一次性"语义 = 该种子邮箱并发下恰被提权一次（email UNIQUE 串行化 + bootstrap 审计唯一）
         var owners = await verify.Users.IgnoreQueryFilters()
-            .Where(u => u.Permission == UserPermission.ServerOwner)
+            .Where(u => u.Permission == UserPermission.ServerOwner && u.Email == seedEmail)
             .ToListAsync();
         Assert.Single(owners);
         Assert.Equal(seedEmail, owners[0].Email);

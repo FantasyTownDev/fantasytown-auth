@@ -10,6 +10,7 @@ namespace FantasyTown.Auth.IntegrationTests;
 /// 本地经 appsettings.IntegrationTests.json 连 MariaDB；CI 有 Docker 时用 Testcontainers。
 /// </summary>
 [Trait("Category", "Integration")]
+[Collection("MariaDB")]
 public class BanPlayerIntegrationTests : IAsyncLifetime
 {
     private string _connectionString = null!;

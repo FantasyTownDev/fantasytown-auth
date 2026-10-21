@@ -9,6 +9,7 @@ namespace FantasyTown.Auth.IntegrationTests;
 /// 玩家解封命令集成测试（§5.3 对称语义 + 防错 #7：0 行 = 幂等成功）。
 /// </summary>
 [Trait("Category", "Integration")]
+[Collection("MariaDB")]
 public class UnbanPlayerIntegrationTests : IAsyncLifetime
 {
     private string _connectionString = null!;
