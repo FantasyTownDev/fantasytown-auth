@@ -300,15 +300,20 @@ app.UseWhen(
 app.UseStaticFiles();
 app.UseRouting();
 
-// 纹理端点必须在 HTTPS 重定向之前注册，Minecraft 客户端不跟随重定向
+// 纹理端点（/textures/*；重定向豁免见上方 UseWhen，T3-008）
 app.MapTextures();
 
 // 认证和授权中间件（必须在路由之后）
 app.UseAuthentication();
-app.UseAuthorization();
 
-// 封禁用户拦截中间件
-app.UseMiddleware<RejectBannedUserMiddleware>();
+// 封禁用户拦截中间件（T3-003/T3-007）：必须在 UseAuthentication 之后、
+// UseAuthorization/MapRazorPages 之前（§2.3 冻结顺序）；经 UseWhen 仅对携带
+// 认证 cookie 的请求生效，匿名流量（纹理/静态资源）不进入该分支
+app.UseWhen(
+    context => context.Request.Cookies.ContainsKey("__Host-ft_auth"),
+    branch => branch.UseMiddleware<RejectBannedUserMiddleware>());
+
+app.UseAuthorization();
 
 app.MapRazorPages();
 app.MapHealthChecks("/health");
