@@ -1,5 +1,6 @@
 using System.Net;
 using FantasyTown.Auth.Middleware;
+using FantasyTown.Auth.Modules.Accounts.Application;
 using FantasyTown.Auth.Modules.Accounts.Infrastructure;
 using FantasyTown.Auth.Modules.Shared;
 using FantasyTown.Auth.Modules.Yggdrasil.Authserver;
@@ -84,8 +85,17 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.AccessDeniedPath = "/Account/AccessDenied";
     });
 
+// 3.1 授权策略（V5 §5.2：三策略一律读 PERM 快照，只信 uid claim——不读 Cookie Role claim）
+// 实施指导 §2.3 装配顺序：认证之后、Razor Pages 之前
+builder.Services.AddAuthorizationBuilder()
+    .AddPolicy(AdminPolicies.Moderator, p => p.RequireAssertion(ctx => AdminPolicies.EvaluateAsync(ctx, ownerTier: false)))
+    .AddPolicy(AdminPolicies.Owner, p => p.RequireAssertion(ctx => AdminPolicies.EvaluateAsync(ctx, ownerTier: true)))
+    .AddPolicy(AdminPolicies.Admin, p => p.RequireAssertion(ctx => AdminPolicies.EvaluateAsync(ctx, ownerTier: true)));
+
 // 4. 服务注册
 builder.Services.AddScoped<IPasswordService, Argon2PasswordService>();
+// 时钟抽象（策略谓词与封禁时间谓词取当前 UTC，支持确定性测试）
+builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.AddScoped<IPermissionSnapshot, RedisPermissionSnapshot>();
 builder.Services.AddScoped<ILockoutService, RedisLockoutService>();
 // 站点选项（V5 配置表 options 项；DB 表热加载随 options 轨道接入）
