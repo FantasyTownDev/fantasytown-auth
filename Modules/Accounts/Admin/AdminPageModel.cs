@@ -19,6 +19,8 @@ public abstract class AdminPageModel : PageModel
     public const string NavOwnerKey = "NavOwner";
 
     private readonly IPermissionSnapshot _permissionSnapshot;
+    private PermissionSnapshot? _actorSnapshot;
+    private bool _actorSnapshotLoaded;
 
     protected AdminPageModel(IPermissionSnapshot permissionSnapshot)
         => _permissionSnapshot = permissionSnapshot;
@@ -26,15 +28,26 @@ public abstract class AdminPageModel : PageModel
     /// <summary>操作者 UID（/Admin 文件夹策略已保证已认证；防御性允许 null）</summary>
     protected int? ActorUid => User.GetUid();
 
+    /// <summary>操作者 PERM 快照（请求内缓存；null = 未认证或防御性残留）</summary>
+    protected async Task<PermissionSnapshot?> GetActorSnapshotAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_actorSnapshotLoaded)
+        {
+            _actorSnapshot = ActorUid is { } uid
+                ? await _permissionSnapshot.GetAsync(uid, cancellationToken)
+                : null;
+            _actorSnapshotLoaded = true;
+        }
+        return _actorSnapshot;
+    }
+
     /// <summary>
     /// 计算导航/投影所需的两档可见性标记并写入 ViewData。
     /// 快照封禁哨兵（IsBanned）按无特权处理——被封禁管理员不渲染任何管理入口。
     /// </summary>
     protected async Task SetNavFlagsAsync(CancellationToken cancellationToken = default)
     {
-        var snapshot = ActorUid is { } uid
-            ? await _permissionSnapshot.GetAsync(uid, cancellationToken)
-            : null;
+        var snapshot = await GetActorSnapshotAsync(cancellationToken);
         var permission = snapshot?.Permission ?? UserPermission.NormalPlayer;
         var banned = snapshot?.IsBanned ?? true;
 
