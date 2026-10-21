@@ -11,5 +11,11 @@ public enum ManagementMatrix
     OwnerUser,
 
     /// <summary>解除 LOCKOUT（moderator 策略；自我解锁放行，V5 评审 N1）</summary>
-    ClearLockout
+    ClearLockout,
+
+    /// <summary>玩家域 moderator 操作（封禁/解封/重置皮肤；约束在属主：CanManage + NotSelf，§7.2/§7.5）</summary>
+    PlayerModerator,
+
+    /// <summary>玩家域 owner 操作（改名；约束同上 + owner 白名单，§7.2）</summary>
+    PlayerOwner
 }
