@@ -1,0 +1,32 @@
+@page
+@model FantasyTown.Auth.Pages.Admin.ModeratorsModel
+@{
+    ViewData["Title"] = "协管列表";
+}
+
+<h1>协管列表</h1>
+
+@if (Model.Moderators.Count == 0)
+{
+    <p class="muted">当前没有协管。可在用户详情页将普通玩家任命为协管。</p>
+}
+else
+{
+    <table>
+        <tr><th>UID</th><th>邮箱</th><th>状态</th><th>注册 (UTC)</th><th></th></tr>
+        @foreach (var mod in Model.Moderators)
+        {
+            <tr>
+                <td>@mod.Uid</td>
+                <td>@mod.Email</td>
+                <td>
+                    @if (mod.IsBanned) { <span class="badge badge-banned">封禁中</span> }
+                    @if (mod.IsDeleted) { <span class="badge badge-banned">已软删</span> }
+                    @if (!mod.IsBanned && !mod.IsDeleted) { <span class="badge badge-ok">正常</span> }
+                </td>
+                <td>@mod.RegisterAt.ToString("yyyy-MM-dd HH:mm")</td>
+                <td><a href="/admin/users/@mod.Uid" style="color:#00d4ff;">详情</a></td>
+            </tr>
+        }
+    </table>
+}
