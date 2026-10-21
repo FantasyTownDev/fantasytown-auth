@@ -30,7 +30,7 @@ public sealed record YggOptions
     /// 皮肤纹理基础 URL。用于构建 textures SKIN url。
     /// 示例：http://localhost:5001
     /// </summary>
-    public string SkinBaseUrl { get; init; } = "http://localhost:5001";
+    public string SkinBaseUrl { get; init; } = "https://localhost:5001";
 
     /// <summary>
     /// 皮肤域名白名单。Minecraft 客户端校验纹理 URL 是否在此列表中。

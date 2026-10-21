@@ -150,6 +150,23 @@ builder.Services.AddSingleton(Options.Create(forwardedHeadersOptions));
 // 5. Yggdrasil 服务
 var yggOptions = builder.Configuration.GetSection("Yggdrasil").Get<YggOptions>() ?? new YggOptions();
 builder.Services.AddSingleton(yggOptions);
+
+// T3-011：SkinBaseUrl 必须 HTTPS（§6.8 Mojang 模式纹理 value）——非开发环境启动 fail-fast，
+// Development 仅告警（本地 HTTP 环境可继续开发；/textures 重定向豁免见 T3-008）
+if (!yggOptions.SkinBaseUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+{
+    if (builder.Environment.IsDevelopment())
+    {
+        Console.Error.WriteLine(
+            $"[WARN] Yggdrasil:SkinBaseUrl 非 HTTPS（当前：{yggOptions.SkinBaseUrl}）——非开发环境将启动失败（T3-011）");
+    }
+    else
+    {
+        throw new InvalidOperationException(
+            $"Yggdrasil:SkinBaseUrl 必须以 https:// 开头（当前：{yggOptions.SkinBaseUrl}）。" +
+            "Minecraft 客户端纹理拉取要求 HTTPS（V5 §6.8 / 审计 T3-011）。");
+    }
+}
 builder.Services.AddSingleton<AuthConcurrencyLimiter>();
 builder.Services.AddSingleton<IRateLimiter>(sp =>
 {
