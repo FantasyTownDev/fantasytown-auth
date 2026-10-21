@@ -1,0 +1,39 @@
+@page
+@model FantasyTown.Auth.Pages.Admin.Lockouts.IndexModel
+@{
+    ViewData["Title"] = "账号锁定";
+}
+
+<h1>账号锁定</h1>
+
+<div class="panel">
+    <p class="muted">
+        数据源为 auth_log 派生视图（action=lockout 未被 lockout-cleared 抵消）+ Redis 剩余 TTL 估算；
+        解除仅删除 LOCKOUT 键，失败计数窗保留（§7.3）。
+    </p>
+    @if (Model.Rows.Count == 0)
+    {
+        <p class="muted">当前没有生效中的账号锁定</p>
+    }
+    else
+    {
+        <table>
+            <tr><th>UID</th><th>邮箱</th><th>触发时间 (UTC)</th><th>窗口内失败</th><th>剩余</th><th></th></tr>
+            @foreach (var row in Model.Rows)
+            {
+                <tr>
+                    <td>@row.Uid</td>
+                    <td>@(row.Email ?? $"uid={row.Uid}")</td>
+                    <td>@row.LastLockoutAt.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                    <td>@row.FailureCount</td>
+                    <td>@TimeSpan.FromSeconds(row.RemainingSeconds).ToString(@"hh\:mm\:ss")</td>
+                    <td>
+                        <form method="post" action="/admin/lockouts/@row.Uid/clear" class="inline">
+                            <button type="submit">解除</button>
+                        </form>
+                    </td>
+                </tr>
+            }
+        </table>
+    }
+</div>
