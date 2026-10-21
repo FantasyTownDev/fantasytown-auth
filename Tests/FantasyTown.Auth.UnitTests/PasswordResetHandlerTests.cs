@@ -1,5 +1,6 @@
 using FantasyTown.Auth.Modules.Accounts.Application.Commands;
 using FantasyTown.Auth.Modules.Accounts.Infrastructure;
+using FantasyTown.Auth.Modules.Shared;
 using FantasyTown.Auth.Persistence;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.DataProtection.Extensions;
@@ -25,7 +26,7 @@ public class PasswordResetHandlerTests
 
     private async Task<int> CreateTestUser(AuthDbContext db, string email = "test@example.com")
     {
-        var registerHandler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService());
+        var registerHandler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService(), new SiteOptions(), new InlineOwnerClaimLock());
         var result = await registerHandler.HandleAsync(new RegisterUserCommand
         {
             Username = "testuser",

@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using FantasyTown.Auth.Modules.Accounts.Application.Commands;
 using FantasyTown.Auth.Modules.Accounts.Domain;
 using FantasyTown.Auth.Modules.Accounts.Infrastructure;
+using FantasyTown.Auth.Modules.Shared;
 using FantasyTown.Auth.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -67,7 +68,7 @@ public class ConcurrentRegistrationTests : IAsyncLifetime
             tasks.Add(Task.Run(async () =>
             {
                 using var context = CreateContext();
-                var handler = new RegisterUserHandler(context, new FakePasswordService(), new InMemoryRegistrationQuotaService());
+                var handler = new RegisterUserHandler(context, new FakePasswordService(), new InMemoryRegistrationQuotaService(), new SiteOptions(), new MySqlAdvisoryOwnerClaimLock(context));
                 var command = new RegisterUserCommand
                 {
                     Email = runEmail,
@@ -106,7 +107,7 @@ public class ConcurrentRegistrationTests : IAsyncLifetime
             tasks.Add(Task.Run(async () =>
             {
                 using var context = CreateContext();
-                var handler = new RegisterUserHandler(context, new FakePasswordService(), new InMemoryRegistrationQuotaService());
+                var handler = new RegisterUserHandler(context, new FakePasswordService(), new InMemoryRegistrationQuotaService(), new SiteOptions(), new MySqlAdvisoryOwnerClaimLock(context));
                 var command = new RegisterUserCommand
                 {
                     Email = $"user{index}-{rid}@example.com",
@@ -139,7 +140,7 @@ public class ConcurrentRegistrationTests : IAsyncLifetime
         async Task<RegisterUserResult> RegisterAsync(string username, string email)
         {
             using var context = CreateContext();
-            var handler = new RegisterUserHandler(context, new FakePasswordService(), quota);
+            var handler = new RegisterUserHandler(context, new FakePasswordService(), quota, new SiteOptions(), new MySqlAdvisoryOwnerClaimLock(context));
             return await handler.HandleAsync(new RegisterUserCommand
             {
                 Username = username,
@@ -179,7 +180,7 @@ public class ConcurrentRegistrationTests : IAsyncLifetime
 
         using (var seedContext = CreateContext())
         {
-            var seedHandler = new RegisterUserHandler(seedContext, new FakePasswordService(), new InMemoryRegistrationQuotaService());
+            var seedHandler = new RegisterUserHandler(seedContext, new FakePasswordService(), new InMemoryRegistrationQuotaService(), new SiteOptions(), new MySqlAdvisoryOwnerClaimLock(seedContext));
             var seed = await seedHandler.HandleAsync(new RegisterUserCommand
             {
                 Username = $"dup_{unique}",
@@ -193,7 +194,7 @@ public class ConcurrentRegistrationTests : IAsyncLifetime
         // 同名不同邮箱 → 1062：User+Player 必须同一事务整体回滚
         using (var conflictContext = CreateContext())
         {
-            var handler = new RegisterUserHandler(conflictContext, new FakePasswordService(), new InMemoryRegistrationQuotaService());
+            var handler = new RegisterUserHandler(conflictContext, new FakePasswordService(), new InMemoryRegistrationQuotaService(), new SiteOptions(), new MySqlAdvisoryOwnerClaimLock(conflictContext));
             var result = await handler.HandleAsync(new RegisterUserCommand
             {
                 Username = $"dup_{unique}",

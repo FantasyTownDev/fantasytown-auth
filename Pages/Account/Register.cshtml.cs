@@ -14,17 +14,23 @@ public class RegisterModel : PageModel
     private readonly IPasswordService _passwordService;
     private readonly IClientIp _clientIp;
     private readonly IRegistrationQuotaService _registrationQuota;
+    private readonly SiteOptions _siteOptions;
+    private readonly IOwnerClaimLock _ownerClaimLock;
 
     public RegisterModel(
         AuthDbContext db,
         IPasswordService passwordService,
         IClientIp clientIp,
-        IRegistrationQuotaService registrationQuota)
+        IRegistrationQuotaService registrationQuota,
+        SiteOptions siteOptions,
+        IOwnerClaimLock ownerClaimLock)
     {
         _db = db;
         _passwordService = passwordService;
         _clientIp = clientIp;
         _registrationQuota = registrationQuota;
+        _siteOptions = siteOptions;
+        _ownerClaimLock = ownerClaimLock;
     }
 
     [BindProperty]
@@ -60,7 +66,7 @@ public class RegisterModel : PageModel
 
         var clientIp = _clientIp.GetClientIp() ?? "unknown";
 
-        var handler = new RegisterUserHandler(_db, _passwordService, _registrationQuota);
+        var handler = new RegisterUserHandler(_db, _passwordService, _registrationQuota, _siteOptions, _ownerClaimLock);
         var command = new RegisterUserCommand
         {
             Username = Input.Username,

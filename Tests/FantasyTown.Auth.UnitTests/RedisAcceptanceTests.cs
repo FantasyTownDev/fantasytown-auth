@@ -2,6 +2,7 @@ using FantasyTown.Auth.Modules.Accounts.Application.Commands;
 using FantasyTown.Auth.Modules.Accounts.Application.Queries;
 using FantasyTown.Auth.Modules.Accounts.Domain;
 using FantasyTown.Auth.Modules.Accounts.Infrastructure;
+using FantasyTown.Auth.Modules.Shared;
 using FantasyTown.Auth.Persistence;
 using Microsoft.EntityFrameworkCore;
 using StackExchange.Redis;
@@ -212,7 +213,7 @@ public class RedisAcceptanceTests : IDisposable
     public async Task LoginFailed_ShouldLockAccountViaSharedKeyspace()
     {
         using var db = CreateInMemoryDbContext();
-        var registerHandler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService());
+        var registerHandler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService(), new SiteOptions(), new InlineOwnerClaimLock());
         var username = $"lok_{Guid.NewGuid().ToString("N")[..8]}";
         var clientIp = $"10.{Random.Shared.Next(1, 255)}.{Random.Shared.Next(1, 255)}.{Random.Shared.Next(1, 255)}";
 

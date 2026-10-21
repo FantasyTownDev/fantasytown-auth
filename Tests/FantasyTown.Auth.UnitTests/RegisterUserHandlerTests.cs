@@ -1,5 +1,7 @@
 using FantasyTown.Auth.Modules.Accounts.Application.Commands;
+using FantasyTown.Auth.Modules.Accounts.Domain;
 using FantasyTown.Auth.Modules.Accounts.Infrastructure;
+using FantasyTown.Auth.Modules.Shared;
 using FantasyTown.Auth.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -22,7 +24,7 @@ public class RegisterUserHandlerTests
     public async Task HandleAsync_ValidCommand_ReturnsSuccess()
     {
         using var db = CreateInMemoryDbContext();
-        var handler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService());
+        var handler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService(), new SiteOptions(), new InlineOwnerClaimLock());
 
         var command = new RegisterUserCommand
         {
@@ -47,7 +49,7 @@ public class RegisterUserHandlerTests
     public async Task HandleAsync_DuplicateUsername_LogicallyReturnsFailure()
     {
         using var db = CreateInMemoryDbContext();
-        var handler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService());
+        var handler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService(), new SiteOptions(), new InlineOwnerClaimLock());
 
         var command1 = new RegisterUserCommand
         {
@@ -78,7 +80,7 @@ public class RegisterUserHandlerTests
     public async Task HandleAsync_DuplicateEmail_LogicallyReturnsFailure()
     {
         using var db = CreateInMemoryDbContext();
-        var handler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService());
+        var handler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService(), new SiteOptions(), new InlineOwnerClaimLock());
 
         var command1 = new RegisterUserCommand
         {
@@ -111,7 +113,7 @@ public class RegisterUserHandlerTests
     public async Task HandleAsync_InvalidUsername_ReturnsFailure(string username)
     {
         using var db = CreateInMemoryDbContext();
-        var handler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService());
+        var handler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService(), new SiteOptions(), new InlineOwnerClaimLock());
 
         var command = new RegisterUserCommand
         {
@@ -133,7 +135,7 @@ public class RegisterUserHandlerTests
     public async Task HandleAsync_WeakPassword_ReturnsFailure(string password)
     {
         using var db = CreateInMemoryDbContext();
-        var handler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService());
+        var handler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService(), new SiteOptions(), new InlineOwnerClaimLock());
 
         var command = new RegisterUserCommand
         {
@@ -155,7 +157,7 @@ public class RegisterUserHandlerTests
     public async Task HandleAsync_InvalidEmail_ReturnsFailure(string email)
     {
         using var db = CreateInMemoryDbContext();
-        var handler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService());
+        var handler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService(), new SiteOptions(), new InlineOwnerClaimLock());
 
         var command = new RegisterUserCommand
         {
@@ -175,7 +177,7 @@ public class RegisterUserHandlerTests
     public async Task HandleAsync_NullEmail_Succeeds()
     {
         using var db = CreateInMemoryDbContext();
-        var handler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService());
+        var handler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService(), new SiteOptions(), new InlineOwnerClaimLock());
 
         var command = new RegisterUserCommand
         {
@@ -195,7 +197,7 @@ public class RegisterUserHandlerTests
     public async Task HandleAsync_CreatesUserInDatabase()
     {
         using var db = CreateInMemoryDbContext();
-        var handler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService());
+        var handler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService(), new SiteOptions(), new InlineOwnerClaimLock());
 
         var command = new RegisterUserCommand
         {
@@ -218,7 +220,7 @@ public class RegisterUserHandlerTests
     public async Task HandleAsync_CreatesPlayerInDatabase()
     {
         using var db = CreateInMemoryDbContext();
-        var handler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService());
+        var handler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService(), new SiteOptions(), new InlineOwnerClaimLock());
 
         var command = new RegisterUserCommand
         {
@@ -245,7 +247,7 @@ public class RegisterUserHandlerTests
     {
         using var db = CreateInMemoryDbContext();
         var quota = new InMemoryRegistrationQuotaService(limit: 1);
-        var handler = new RegisterUserHandler(db, _passwordService, quota);
+        var handler = new RegisterUserHandler(db, _passwordService, quota, new SiteOptions(), new InlineOwnerClaimLock());
 
         var first = await handler.HandleAsync(new RegisterUserCommand
         {
@@ -279,7 +281,7 @@ public class RegisterUserHandlerTests
     {
         using var db = CreateInMemoryDbContext();
         var quota = new InMemoryRegistrationQuotaService(limit: 1);
-        var handler = new RegisterUserHandler(db, _passwordService, quota);
+        var handler = new RegisterUserHandler(db, _passwordService, quota, new SiteOptions(), new InlineOwnerClaimLock());
 
         // 弱密码校验失败（不计数）
         var weak = await handler.HandleAsync(new RegisterUserCommand
@@ -299,4 +301,201 @@ public class RegisterUserHandlerTests
         });
         Assert.True(ok.IsSuccess);
     }
+
+    private RegisterUserHandler CreateHandler(AuthDbContext db, string? seedEmail = null, IOwnerClaimLock? ownerClaimLock = null) =>
+        new(db, _passwordService, new InMemoryRegistrationQuotaService(),
+            new SiteOptions { SeedOwnerEmail = seedEmail ?? string.Empty },
+            ownerClaimLock ?? new InlineOwnerClaimLock());
+
+    /// <summary>
+    /// V5 §4 引导（审计 C1）：种子邮箱首注册提权为服主，并落 permission-change 审计
+    /// （actor=NULL 系统行为，context=bootstrap=seed）
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_SeedEmail_FirstRegistration_GrantsOwnerAndAudits()
+    {
+        using var db = CreateInMemoryDbContext();
+        var handler = CreateHandler(db, seedEmail: "seed@example.com");
+
+        var result = await handler.HandleAsync(new RegisterUserCommand
+        {
+            Username = "seed_owner",
+            Password = "Password123!",
+            Email = "seed@example.com",
+            ClientIp = "127.0.0.1"
+        });
+
+        Assert.True(result.IsSuccess);
+        var user = await db.Users.FirstAsync(u => u.Uid == result.UserId);
+        Assert.Equal(UserPermission.ServerOwner, user.Permission);
+
+        var log = await db.AuthLogs.FirstOrDefaultAsync(l => l.Action == "permission-change");
+        Assert.NotNull(log);
+        Assert.Null(log.ActorId);
+        Assert.Equal(result.UserId, log.SubjectId);
+        Assert.Equal("bootstrap=seed", log.Context);
+    }
+
+    /// <summary>
+    /// V5 §4（审计 C1 语义修正）：提权条件是"库中无任何 ServerOwner"而非"无任何用户"——
+    /// 首个注册者非种子邮箱时，种子邮箱后续注册仍应获得服主
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_SeedEmail_AfterNonSeedFirstUser_StillGrantsOwner()
+    {
+        using var db = CreateInMemoryDbContext();
+
+        var first = await CreateHandler(db).HandleAsync(new RegisterUserCommand
+        {
+            Username = "normal_first",
+            Password = "Password123!",
+            Email = "normal@example.com",
+            ClientIp = "127.0.0.1"
+        });
+        Assert.True(first.IsSuccess);
+
+        var seed = await CreateHandler(db, seedEmail: "seed@example.com").HandleAsync(new RegisterUserCommand
+        {
+            Username = "seed_second",
+            Password = "Password123!",
+            Email = "seed@example.com",
+            ClientIp = "127.0.0.1"
+        });
+
+        Assert.True(seed.IsSuccess);
+        var user = await db.Users.FirstAsync(u => u.Uid == seed.UserId);
+        Assert.Equal(UserPermission.ServerOwner, user.Permission);
+    }
+
+    /// <summary>
+    /// V5 §4 "仅生效一次"：库中已存在服主后，种子邮箱再注册不提权
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_SeedEmail_DoesNotEscalate_WhenOwnerExists()
+    {
+        using var db = CreateInMemoryDbContext();
+        var seedEmail = "seed@example.com";
+
+        var first = await CreateHandler(db, seedEmail).HandleAsync(new RegisterUserCommand
+        {
+            Username = "seed_owner",
+            Password = "Password123!",
+            Email = seedEmail,
+            ClientIp = "127.0.0.1"
+        });
+        Assert.True(first.IsSuccess);
+
+        var second = await CreateHandler(db, seedEmail).HandleAsync(new RegisterUserCommand
+        {
+            Username = "seed_again",
+            Password = "Password123!",
+            Email = seedEmail,
+            ClientIp = "127.0.0.1"
+        });
+
+        Assert.True(second.IsSuccess);
+        var user = await db.Users.FirstAsync(u => u.Uid == second.UserId);
+        Assert.Equal(UserPermission.NormalPlayer, user.Permission);
+        Assert.Equal(1, await db.Users.CountAsync(u => u.Permission == UserPermission.ServerOwner));
+    }
+
+    /// <summary>
+    /// V5 §4 "仅生效一次"（含软删）：服主被软删后种子邮箱不得再次提权（恢复走 CLI promote-owner）
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_SeedEmail_OwnerSoftDeleted_DoesNotEscalate()
+    {
+        using var db = CreateInMemoryDbContext();
+        var seedEmail = "seed@example.com";
+
+        var first = await CreateHandler(db, seedEmail).HandleAsync(new RegisterUserCommand
+        {
+            Username = "seed_owner",
+            Password = "Password123!",
+            Email = seedEmail,
+            ClientIp = "127.0.0.1"
+        });
+        Assert.True(first.IsSuccess);
+
+        // 软删服主（全局过滤器将排除该行，判定必须 IgnoreQueryFilters）
+        var owner = await db.Users.FirstAsync(u => u.Uid == first.UserId);
+        owner.IsDeleted = true;
+        await db.SaveChangesAsync();
+
+        var second = await CreateHandler(db, seedEmail).HandleAsync(new RegisterUserCommand
+        {
+            Username = "seed_after_del",
+            Password = "Password123!",
+            Email = seedEmail,
+            ClientIp = "127.0.0.1"
+        });
+
+        Assert.True(second.IsSuccess);
+        var user = await db.Users.FirstAsync(u => u.Uid == second.UserId);
+        Assert.Equal(UserPermission.NormalPlayer, user.Permission);
+    }
+
+    /// <summary>
+    /// 配置空 = 禁用种子：未配置 SeedOwnerEmail 时任何邮箱注册均不提权
+    /// （替代原硬编码 owner@fantasytown.com 的 TODO 行为）
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_EmptySeedConfig_NeverEscalates()
+    {
+        using var db = CreateInMemoryDbContext();
+        var handler = CreateHandler(db);
+
+        var result = await handler.HandleAsync(new RegisterUserCommand
+        {
+            Username = "legacy_seed",
+            Password = "Password123!",
+            Email = "owner@fantasytown.com",
+            ClientIp = "127.0.0.1"
+        });
+
+        Assert.True(result.IsSuccess);
+        var user = await db.Users.FirstAsync(u => u.Uid == result.UserId);
+        Assert.Equal(UserPermission.NormalPlayer, user.Permission);
+        Assert.Empty(await db.AuthLogs.Where(l => l.Action == "permission-change").ToListAsync());
+    }
+
+    /// <summary>
+    /// 审计 C1 安全方向：未获得独占锁（另一引导在途）时放弃提权，绝不双提权
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_SeedEmail_LockNotAcquired_DoesNotEscalate()
+    {
+        using var db = CreateInMemoryDbContext();
+        var handler = CreateHandler(db, "seed@example.com", ownerClaimLock: new NotAcquiredOwnerClaimLock());
+
+        var result = await handler.HandleAsync(new RegisterUserCommand
+        {
+            Username = "no_lock_seed",
+            Password = "Password123!",
+            Email = "seed@example.com",
+            ClientIp = "127.0.0.1"
+        });
+
+        Assert.True(result.IsSuccess);
+        var user = await db.Users.FirstAsync(u => u.Uid == result.UserId);
+        Assert.Equal(UserPermission.NormalPlayer, user.Permission);
+    }
+}
+
+/// <summary>
+/// InMemory 测试替身：直通执行并模拟获锁（真实独占语义由 MariaDB 集成测试覆盖）
+/// </summary>
+internal sealed class InlineOwnerClaimLock : IOwnerClaimLock
+{
+    public Task<T> RunExclusiveAsync<T>(Func<bool, Task<T>> action, CancellationToken cancellationToken = default)
+        => action(true);
+}
+
+/// <summary>
+/// InMemory 测试替身：模拟未获锁（另一引导在途），提权必须被放弃
+/// </summary>
+internal sealed class NotAcquiredOwnerClaimLock : IOwnerClaimLock
+{
+    public Task<T> RunExclusiveAsync<T>(Func<bool, Task<T>> action, CancellationToken cancellationToken = default)
+        => action(false);
 }

@@ -1,5 +1,6 @@
 using FantasyTown.Auth.Modules.Accounts.Domain;
 using FantasyTown.Auth.Modules.Accounts.Infrastructure;
+using FantasyTown.Auth.Modules.Shared;
 using FantasyTown.Auth.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -14,12 +15,21 @@ public sealed class RegisterUserHandler
     private readonly AuthDbContext _db;
     private readonly IPasswordService _passwordService;
     private readonly IRegistrationQuotaService _registrationQuota;
+    private readonly SiteOptions _siteOptions;
+    private readonly IOwnerClaimLock _ownerClaimLock;
 
-    public RegisterUserHandler(AuthDbContext db, IPasswordService passwordService, IRegistrationQuotaService registrationQuota)
+    public RegisterUserHandler(
+        AuthDbContext db,
+        IPasswordService passwordService,
+        IRegistrationQuotaService registrationQuota,
+        SiteOptions siteOptions,
+        IOwnerClaimLock ownerClaimLock)
     {
         _db = db;
         _passwordService = passwordService;
         _registrationQuota = registrationQuota;
+        _siteOptions = siteOptions;
+        _ownerClaimLock = ownerClaimLock;
     }
 
     /// <summary>
@@ -57,17 +67,41 @@ public sealed class RegisterUserHandler
         // 6. 生成玩家 UUID
         var playerUuid = Guid.NewGuid().ToString("N").ToUpperInvariant();
 
-        // 7. 检查是否为种子邮箱（首次注册时提权为服主）
-        var isFirstUser = !await _db.Users.AnyAsync(cancellationToken);
+        // 7. 种子邮箱判定（V5 §4 引导：配置 SeedOwnerEmail，空 = 禁用种子）
         var isSeedEmail = IsSeedEmail(command.Email);
 
-        // 8. 创建用户与玩家（导航属性关联；EF 按外键依赖拓扑排序，先 User 后 Player）
+        // 审计 C1：种子提权判定与注册落库必须在同一独占窗内（MariaDB 咨询锁），
+        // 否则并发注册在竞享窗口内可能双双通过"无服主"判定
+        if (isSeedEmail)
+        {
+            return await _ownerClaimLock.RunExclusiveAsync(
+                acquired => RegisterCoreAsync(command, passwordHash, playerUuid, allowSeedGrant: acquired, cancellationToken),
+                cancellationToken);
+        }
+
+        return await RegisterCoreAsync(command, passwordHash, playerUuid, allowSeedGrant: false, cancellationToken);
+    }
+
+    private async Task<RegisterUserResult> RegisterCoreAsync(
+        RegisterUserCommand command,
+        string passwordHash,
+        string playerUuid,
+        bool allowSeedGrant,
+        CancellationToken cancellationToken)
+    {
+        // V5 §4 引导语义（审计 C1 重构）：仅当库中不存在任何 ServerOwner（含软删，
+        // "仅生效一次"防止种子配置残留导致后续同名邮箱再被提权）且持有独占锁时提权；
+        // 判定贴近落库点
+        var grantOwner = allowSeedGrant
+            && !await _db.Users.IgnoreQueryFilters().AnyAsync(u => u.Permission == UserPermission.ServerOwner, cancellationToken);
+
+        // 创建用户与玩家（导航属性关联；EF 按外键依赖拓扑排序，先 User 后 Player）
         var user = new User
         {
             Email = command.Email ?? string.Empty,
             Password = passwordHash,
             Ip = command.ClientIp,
-            Permission = (isFirstUser && isSeedEmail) ? UserPermission.ServerOwner : UserPermission.NormalPlayer,
+            Permission = grantOwner ? UserPermission.ServerOwner : UserPermission.NormalPlayer,
             IsBanned = false,
             SecurityStamp = Guid.NewGuid().ToString(),
             Verified = false,
@@ -88,10 +122,24 @@ public sealed class RegisterUserHandler
 
         try
         {
-            // 9. 单次保存：User+Player 同一事务原子落库（审计 M4/T3-013，杜绝孤儿 User 占用邮箱）
+            // 单次保存：User+Player 同一事务原子落库（审计 M4/T3-013，杜绝孤儿 User 占用邮箱）
             await _db.SaveChangesAsync(cancellationToken);
 
-            // 10. 注册成功后计数（REG_IP:{ip}，仅成功消耗配额；超发告警由配额服务写入）
+            // 种子提权审计：actor=NULL（系统引导行为），context=bootstrap=seed（V5 §4）
+            if (grantOwner)
+            {
+                _db.AuthLogs.Add(new AuthLog
+                {
+                    Action = "permission-change",
+                    ActorId = null,
+                    SubjectId = user.Uid,
+                    Context = "bootstrap=seed",
+                    CreatedAt = DateTime.UtcNow
+                });
+                await _db.SaveChangesAsync(cancellationToken);
+            }
+
+            // 注册成功后计数（REG_IP:{ip}，仅成功消耗配额；超发告警由配额服务写入）
             await _registrationQuota.RecordRegistrationAsync(command.ClientIp, cancellationToken);
 
             return RegisterUserResult.Success(user.Uid, command.Username, Guid.Parse(playerUuid));
@@ -161,12 +209,9 @@ public sealed class RegisterUserHandler
     }
 
     /// <summary>
-    /// 检查是否为种子邮箱
+    /// 种子邮箱判定（V5 §4：种子值来自配置 SeedOwnerEmail；空 = 禁用种子）
     /// </summary>
-    private static bool IsSeedEmail(string? email)
-    {
-        // TODO: 从配置读取种子邮箱列表
-        // 目前默认 owner@fantasytown.com 为种子邮箱
-        return email?.Equals("owner@fantasytown.com", StringComparison.OrdinalIgnoreCase) == true;
-    }
+    private bool IsSeedEmail(string? email) =>
+        !string.IsNullOrEmpty(_siteOptions.SeedOwnerEmail)
+        && email?.Equals(_siteOptions.SeedOwnerEmail, StringComparison.OrdinalIgnoreCase) == true;
 }
