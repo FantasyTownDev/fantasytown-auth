@@ -99,7 +99,9 @@ builder.Services.AddScoped<IPasswordService, Argon2PasswordService>();
 // 时钟抽象（策略谓词与封禁时间谓词取当前 UTC，支持确定性测试）
 builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.AddScoped<IPermissionSnapshot, RedisPermissionSnapshot>();
-builder.Services.AddScoped<ILockoutService, RedisLockoutService>();
+builder.Services.AddScoped<ILockoutService>(sp => new RedisLockoutService(
+    sp.GetRequiredService<IConnectionMultiplexer>(),
+    auditDb: sp.GetRequiredService<AuthDbContext>()));
 // 站点选项（V5 配置表 options 项；DB 表热加载随 options 轨道接入）
 // 绑定自 SiteOptions 配置节（appsettings / 环境变量），空节回退默认值
 builder.Services.AddSingleton(builder.Configuration.GetSection("SiteOptions").Get<SiteOptions>() ?? new SiteOptions());
