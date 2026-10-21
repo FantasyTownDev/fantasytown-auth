@@ -1,7 +1,6 @@
 using FantasyTown.Auth.Modules.Accounts.Domain;
 using FantasyTown.Auth.Modules.Accounts.Infrastructure;
 using FantasyTown.Auth.Persistence;
-using Microsoft.EntityFrameworkCore;
 
 namespace FantasyTown.Auth.Modules.Accounts.Application.Commands;
 
@@ -26,32 +25,11 @@ public sealed class ClearUserLockoutHandler
         ClearUserLockoutCommand command,
         CancellationToken cancellationToken = default)
     {
-        var target = await _db.Users
-            .IgnoreQueryFilters()
-            .FirstOrDefaultAsync(u => u.Uid == command.TargetUid, cancellationToken);
-
-        if (target == null)
-            return ClearUserLockoutResult.Failure("用户不存在");
-
-        // moderator 策略白名单（禁 >=）：协管/服主/PlatformAdmin，普通玩家无管理能力
-        var actor = await _db.Users
-            .FirstOrDefaultAsync(u => u.Uid == command.ActorUid, cancellationToken);
-
-        if (actor == null
-            || actor.Permission is not (UserPermission.ServerModerator or UserPermission.ServerOwner or UserPermission.PlatformAdmin)
-            || !ManagementGuard.CanClearLockout(actor.Permission, target.Permission, command.ActorUid, command.TargetUid))
-        {
-            _db.AuthLogs.Add(new AuthLog
-            {
-                Action = "admin-denied",
-                ActorId = command.ActorUid,
-                SubjectId = command.TargetUid,
-                Context = "lockout-clear",
-                CreatedAt = DateTime.UtcNow
-            });
-            await _db.SaveChangesAsync(cancellationToken);
-            return ClearUserLockoutResult.Failure("无权操作");
-        }
+        // 统一授权闸门（V5 §7.2：moderator 白名单 + CanClearLockout 自我放行 + admin-denied 审计）
+        var evaluation = await ClearLockoutAuthorization.EvaluateAsync(
+            _db, command.ActorUid, command.TargetUid, "lockout-clear", cancellationToken);
+        if (evaluation.Denial != null)
+            return ClearUserLockoutResult.Failure(evaluation.Denial);
 
         var wasLocked = await _lockoutService.ClearAsync(command.TargetUid, cancellationToken);
 
