@@ -173,7 +173,14 @@ builder.Services.AddScoped<HasJoinedHandler>();
 builder.Services.AddScoped<ProfileHandler>();
 
 // 6. Razor Pages
-builder.Services.AddRazorPages();
+builder.Services.AddRazorPages(o =>
+{
+    // /admin 区域一刀切（V5 §7.1 原则 5，实施指导 §2.3 第 4 节）：
+    // moderator 策略文件夹级兜底 + 管线闸门过滤器；个别页面以
+    // [Authorize(Policy = AdminPolicies.Owner)] 收紧（见 §7.3 路由表）
+    o.Conventions.AuthorizeFolder("/Admin", "moderator");
+    o.Conventions.Add(new AdminGateConvention());
+});
 
 var app = builder.Build();
 
