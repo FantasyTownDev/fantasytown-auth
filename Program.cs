@@ -291,7 +291,12 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-app.UseHttpsRedirection();
+// T3-008：纹理端点经独立管道分支绕过 HTTPS 重定向——Minecraft 客户端不跟随 307，
+// 生产开启重定向后 /textures/* 拉取必须仍可直达（原"先注册 Map 即可"的注释为误解，
+// Map* 只注册路由并非中间件）
+app.UseWhen(
+    context => !context.Request.Path.StartsWithSegments("/textures"),
+    branch => branch.UseHttpsRedirection());
 app.UseStaticFiles();
 app.UseRouting();
 
