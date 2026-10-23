@@ -1,4 +1,5 @@
 using FantasyTown.Auth.Modules.Accounts.Domain;
+using FantasyTown.Auth.Modules.Shared;
 using FantasyTown.Auth.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -6,16 +7,18 @@ namespace FantasyTown.Auth.Modules.Accounts.Application.Commands;
 
 /// <summary>
 /// 软删除用户处理器
-/// 行为：授权判定（审计 H1）→ is_deleted=true + 释放角色名占位 + 审计
+/// 行为：授权判定（审计 H1）→ is_deleted=true + 释放角色名占位 + 吊销全部 Ygg 令牌（H5）+ 审计
 /// 角色名改写为 deleted_{pid}_{timestamp}，释放 UNIQUE 约束
 /// </summary>
 public sealed class SoftDeleteUserHandler
 {
     private readonly AuthDbContext _db;
+    private readonly ITokenRevocation _tokenRevocation;
 
-    public SoftDeleteUserHandler(AuthDbContext db)
+    public SoftDeleteUserHandler(AuthDbContext db, ITokenRevocation tokenRevocation)
     {
         _db = db;
+        _tokenRevocation = tokenRevocation;
     }
 
     public async Task<SoftDeleteUserResult> HandleAsync(
@@ -61,6 +64,9 @@ public sealed class SoftDeleteUserHandler
         });
 
         await _db.SaveChangesAsync(cancellationToken);
+
+        // H5：软删吊销该账户全部 Ygg 令牌（落库成功后触发，异常外抛以暴露 Redis 故障）
+        await _tokenRevocation.RevokeAllAsync(user.Email, cancellationToken);
 
         return SoftDeleteUserResult.Success(releasedName);
     }

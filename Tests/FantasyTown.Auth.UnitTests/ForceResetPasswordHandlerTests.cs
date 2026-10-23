@@ -1,5 +1,6 @@
 using FantasyTown.Auth.Modules.Accounts.Application.Commands;
 using FantasyTown.Auth.Modules.Accounts.Domain;
+using FantasyTown.Auth.Modules.Shared;
 using FantasyTown.Auth.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -29,7 +30,7 @@ public class ForceResetPasswordHandlerTests
     {
         using var db = CreateInMemoryDbContext();
         await SeedOwnerAndNormalAsync(db);
-        var handler = new ForceResetPasswordHandler(db);
+        var handler = new ForceResetPasswordHandler(db, new RecordingTokenRevocation());
 
         var result = await handler.HandleAsync(new ForceResetPasswordCommand
         {
@@ -50,13 +51,32 @@ public class ForceResetPasswordHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_ForceReset_RevokesUserTokens()
+    {
+        using var db = CreateInMemoryDbContext();
+        await SeedOwnerAndNormalAsync(db);
+        var revocation = new RecordingTokenRevocation();
+        var handler = new ForceResetPasswordHandler(db, revocation);
+
+        var result = await handler.HandleAsync(new ForceResetPasswordCommand
+        {
+            TargetUid = 1001,
+            ActorUid = 1
+        });
+
+        Assert.True(result.IsSuccess);
+        // H5：强制重置后以目标邮箱吊销全部 Ygg 令牌
+        Assert.Equal(new[] { "user@test.com" }, revocation.RevokedEmails);
+    }
+
+    [Fact]
     public async Task HandleAsync_ModeratorActor_Denied()
     {
         using var db = CreateInMemoryDbContext();
         await SeedOwnerAndNormalAsync(db);
         db.Users.Add(new User { Uid = 1002, Email = "mod@test.com", Password = "hashed", Permission = UserPermission.ServerModerator, RegisterAt = DateTime.UtcNow });
         await db.SaveChangesAsync();
-        var handler = new ForceResetPasswordHandler(db);
+        var handler = new ForceResetPasswordHandler(db, new RecordingTokenRevocation());
 
         var result = await handler.HandleAsync(new ForceResetPasswordCommand { TargetUid = 1001, ActorUid = 1002 });
 
@@ -71,7 +91,7 @@ public class ForceResetPasswordHandlerTests
     {
         using var db = CreateInMemoryDbContext();
         await SeedOwnerAndNormalAsync(db);
-        var handler = new ForceResetPasswordHandler(db);
+        var handler = new ForceResetPasswordHandler(db, new RecordingTokenRevocation());
 
         // NotSelf（V5 §7.2 规则二）
         var result = await handler.HandleAsync(new ForceResetPasswordCommand { TargetUid = 1, ActorUid = 1 });
@@ -86,7 +106,7 @@ public class ForceResetPasswordHandlerTests
     {
         using var db = CreateInMemoryDbContext();
         await SeedOwnerAndNormalAsync(db);
-        var handler = new ForceResetPasswordHandler(db);
+        var handler = new ForceResetPasswordHandler(db, new RecordingTokenRevocation());
 
         var result = await handler.HandleAsync(new ForceResetPasswordCommand { TargetUid = 9999, ActorUid = 1 });
 
@@ -102,7 +122,7 @@ public class ForceResetPasswordHandlerTests
         var target = await db.Users.FirstAsync(u => u.Uid == 1001);
         target.IsDeleted = true;
         await db.SaveChangesAsync();
-        var handler = new ForceResetPasswordHandler(db);
+        var handler = new ForceResetPasswordHandler(db, new RecordingTokenRevocation());
 
         var result = await handler.HandleAsync(new ForceResetPasswordCommand { TargetUid = 1001, ActorUid = 1 });
 

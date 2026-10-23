@@ -1,4 +1,5 @@
 using FantasyTown.Auth.Modules.Accounts.Domain;
+using FantasyTown.Auth.Modules.Shared;
 using FantasyTown.Auth.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -7,16 +8,18 @@ namespace FantasyTown.Auth.Modules.Accounts.Application.Commands;
 /// <summary>
 /// 邮箱改绑处理器（V5 §7.3）
 /// 副作用：更新 users.email + verified=false（重发验证，验证流程为 P1 遗留 MailService 轨道）
-/// + 审计 email-change（context 含旧值到新值）。DB UNIQUE 冲突按"邮箱已被注册"拒绝。
-/// Ygg 令牌按 ID:{email} 反查键挂链，改绑后的令牌吊销随 Step 5 H5 统一落地。
+/// + 吊销旧邮箱全部 Ygg 令牌（H5，令牌链以 ID:{email} 为键，旧链随改绑作废）+ 审计 email-change
+/// （context 含旧值到新值）。DB UNIQUE 冲突按"邮箱已被注册"拒绝。
 /// </summary>
 public sealed class ChangeUserEmailHandler
 {
     private readonly AuthDbContext _db;
+    private readonly ITokenRevocation _tokenRevocation;
 
-    public ChangeUserEmailHandler(AuthDbContext db)
+    public ChangeUserEmailHandler(AuthDbContext db, ITokenRevocation tokenRevocation)
     {
         _db = db;
+        _tokenRevocation = tokenRevocation;
     }
 
     public async Task<ChangeUserEmailResult> HandleAsync(
@@ -61,6 +64,9 @@ public sealed class ChangeUserEmailHandler
             CreatedAt = DateTime.UtcNow
         });
         await _db.SaveChangesAsync(cancellationToken);
+
+        // H5：吊销旧邮箱链上的全部令牌——令牌链键为 ID:{旧邮箱}，改绑后旧链无法再被验证（异常外抛暴露 Redis 故障）
+        await _tokenRevocation.RevokeAllAsync(oldEmail, cancellationToken);
 
         return ChangeUserEmailResult.Success(oldEmail);
     }

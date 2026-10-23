@@ -1,5 +1,6 @@
 using FantasyTown.Auth.Modules.Accounts.Domain;
 using FantasyTown.Auth.Modules.Accounts.Infrastructure;
+using FantasyTown.Auth.Modules.Shared;
 using FantasyTown.Auth.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,18 +9,22 @@ namespace FantasyTown.Auth.Modules.Accounts.Application.Commands;
 /// <summary>
 /// 账户封禁处理器（V5 §7.3）
 /// 副作用：置 is_banned（含 until/reason）+ DEL PERM 快照（Web 会话经 5.2 快照与拦截中间件即时失效）
-/// + 审计 ban。重复封禁按覆盖处理（新理由/截止时间生效），每次落审计。
-/// Lua 吊销 Ygg 令牌属跨模块副作用，随 Step 5 H5 统一接 Shared 接口。
+/// + 吊销全部 Ygg 令牌（H5）+ 审计 ban。重复封禁按覆盖处理（新理由/截止时间生效），每次落审计。
 /// </summary>
 public sealed class BanUserHandler
 {
     private readonly AuthDbContext _db;
     private readonly IPermissionSnapshot _permissionSnapshot;
+    private readonly ITokenRevocation _tokenRevocation;
 
-    public BanUserHandler(AuthDbContext db, IPermissionSnapshot permissionSnapshot)
+    public BanUserHandler(
+        AuthDbContext db,
+        IPermissionSnapshot permissionSnapshot,
+        ITokenRevocation tokenRevocation)
     {
         _db = db;
         _permissionSnapshot = permissionSnapshot;
+        _tokenRevocation = tokenRevocation;
     }
 
     public async Task<BanUserResult> HandleAsync(
@@ -54,6 +59,9 @@ public sealed class BanUserHandler
             CreatedAt = DateTime.UtcNow
         });
         await _db.SaveChangesAsync(cancellationToken);
+
+        // H5：封禁即时吊销该账户全部 Ygg 令牌（落库成功后触发，异常外抛以暴露 Redis 故障）
+        await _tokenRevocation.RevokeAllAsync(target.Email, cancellationToken);
 
         return BanUserResult.Success();
     }

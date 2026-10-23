@@ -1,4 +1,5 @@
 using FantasyTown.Auth.Modules.Accounts.Domain;
+using FantasyTown.Auth.Modules.Shared;
 using FantasyTown.Auth.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -6,17 +7,19 @@ namespace FantasyTown.Auth.Modules.Accounts.Application.Commands;
 
 /// <summary>
 /// 强制重置密码处理器（V5 §7.3）
-/// 副作用：轮换 security_stamp（旧 Cookie 会话与重置令牌一并失效）+ 审计 password-force-reset。
-/// TODO（Step 5 H5 / MailService 轨道）：Lua 吊销该用户全部 Ygg 令牌（跨模块 Shared 接口）、
-/// 发送重置邮件（MailService 未实现，见 P1 遗留）。管理员全程不接触明文密码。
+/// 副作用：轮换 security_stamp（旧 Cookie 会话与重置令牌一并失效）
+/// + 吊销全部 Ygg 令牌（H5）+ 审计 password-force-reset。
+/// 发送重置邮件属 MailService 轨道（P1 遗留，未实现）。管理员全程不接触明文密码。
 /// </summary>
 public sealed class ForceResetPasswordHandler
 {
     private readonly AuthDbContext _db;
+    private readonly ITokenRevocation _tokenRevocation;
 
-    public ForceResetPasswordHandler(AuthDbContext db)
+    public ForceResetPasswordHandler(AuthDbContext db, ITokenRevocation tokenRevocation)
     {
         _db = db;
+        _tokenRevocation = tokenRevocation;
     }
 
     public async Task<ForceResetPasswordResult> HandleAsync(
@@ -45,6 +48,9 @@ public sealed class ForceResetPasswordHandler
             CreatedAt = DateTime.UtcNow
         });
         await _db.SaveChangesAsync(cancellationToken);
+
+        // H5：强制重置即吊销该账户全部 Ygg 令牌（落库成功后触发，异常外抛以暴露 Redis 故障）
+        await _tokenRevocation.RevokeAllAsync(target.Email, cancellationToken);
 
         return ForceResetPasswordResult.Success();
     }
