@@ -197,6 +197,9 @@ builder.Services.AddScoped<IPlayerCache>(sp =>
     var redis = sp.GetRequiredService<IConnectionMultiplexer>();
     return new RedisPlayerCache(redis);
 });
+// H5：管理域副作用经 Shared 接口触发（Yggdrasil 实现、Accounts 消费，禁止跨模块直引类型）
+builder.Services.AddScoped<ITokenRevocation, TokenRevocationAdapter>();
+builder.Services.AddScoped<IPlayerCacheInvalidation, PlayerCacheInvalidationAdapter>();
 builder.Services.AddSingleton<ISigningService>(sp =>
 {
     var keyPath = builder.Configuration["Signing:PrivateKeyPath"] ?? "keys/signing.pem";
