@@ -92,7 +92,8 @@ public class RenamePlayerIntegrationTests : IAsyncLifetime
         var (_, pid) = SeedPlayer(db, $"mine{rid}");
         var admin = SeedOwnerAdmin(db);
 
-        var handler = new RenamePlayerHandler(db);
+        var cache = new RecordingPlayerCacheInvalidation();
+        var handler = new RenamePlayerHandler(db, cache);
         var result = await handler.HandleAsync(new RenamePlayerCommand
         {
             ActorUid = admin.Uid,
@@ -104,6 +105,8 @@ public class RenamePlayerIntegrationTests : IAsyncLifetime
         Assert.Equal("角色名已被占用", result.ErrorMessage);
         // 名称与 uuid 均未变化
         Assert.Equal($"mine{rid}", (await db.Players.AsNoTracking().FirstAsync(p => p.Pid == pid)).Name);
+        // 失败路径不触发缓存失效（H5 副作用仅随成功落库）
+        Assert.Empty(cache.InvalidatedUuids);
     }
 
     [Fact]
@@ -124,7 +127,8 @@ public class RenamePlayerIntegrationTests : IAsyncLifetime
         db.Users.Add(moderator);
         db.SaveChanges();
 
-        var handler = new RenamePlayerHandler(db);
+        var cache = new RecordingPlayerCacheInvalidation();
+        var handler = new RenamePlayerHandler(db, cache);
         var result = await handler.HandleAsync(new RenamePlayerCommand
         {
             ActorUid = moderator.Uid,
@@ -134,5 +138,7 @@ public class RenamePlayerIntegrationTests : IAsyncLifetime
 
         Assert.False(result.IsSuccess);
         Assert.Equal("无权操作", result.ErrorMessage);
+        // 越权路径不触发缓存失效
+        Assert.Empty(cache.InvalidatedUuids);
     }
 }

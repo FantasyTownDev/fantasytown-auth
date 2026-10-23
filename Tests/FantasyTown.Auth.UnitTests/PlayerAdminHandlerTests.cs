@@ -64,7 +64,7 @@ public class PlayerAdminHandlerTests
         var (_, pid) = SeedPlayer(db, "tex_player", tidSkin: 42);
         var admin = SeedAdmin(db, UserPermission.ServerOwner);
 
-        var handler = new ResetPlayerTextureHandler(db);
+        var handler = new ResetPlayerTextureHandler(db, new RecordingPlayerCacheInvalidation());
         var result = await handler.HandleAsync(new ResetPlayerTextureCommand
         {
             ActorUid = admin.Uid,
@@ -84,7 +84,7 @@ public class PlayerAdminHandlerTests
         var (_, pid) = SeedPlayer(db, "tex_plain");
         var admin = SeedAdmin(db, UserPermission.ServerModerator);
 
-        var handler = new ResetPlayerTextureHandler(db);
+        var handler = new ResetPlayerTextureHandler(db, new RecordingPlayerCacheInvalidation());
         var result = await handler.HandleAsync(new ResetPlayerTextureCommand
         {
             ActorUid = admin.Uid,
@@ -102,7 +102,7 @@ public class PlayerAdminHandlerTests
         var (_, pid) = SeedPlayer(db, "tex_guarded", ownerPermission: UserPermission.ServerOwner);
         var moderator = SeedAdmin(db, UserPermission.ServerModerator);
 
-        var handler = new ResetPlayerTextureHandler(db);
+        var handler = new ResetPlayerTextureHandler(db, new RecordingPlayerCacheInvalidation());
         var result = await handler.HandleAsync(new ResetPlayerTextureCommand
         {
             ActorUid = moderator.Uid,
@@ -122,7 +122,7 @@ public class PlayerAdminHandlerTests
         var originalUuid = player.Uuid;
         var admin = SeedAdmin(db, UserPermission.ServerOwner);
 
-        var handler = new RenamePlayerHandler(db);
+        var handler = new RenamePlayerHandler(db, new RecordingPlayerCacheInvalidation());
         var result = await handler.HandleAsync(new RenamePlayerCommand
         {
             ActorUid = admin.Uid,
@@ -149,7 +149,7 @@ public class PlayerAdminHandlerTests
         var (_, pid) = SeedPlayer(db, "valid_orig");
         var admin = SeedAdmin(db, UserPermission.ServerOwner);
 
-        var handler = new RenamePlayerHandler(db);
+        var handler = new RenamePlayerHandler(db, new RecordingPlayerCacheInvalidation());
         var result = await handler.HandleAsync(new RenamePlayerCommand
         {
             ActorUid = admin.Uid,
@@ -168,7 +168,7 @@ public class PlayerAdminHandlerTests
         var (_, pid) = SeedPlayer(db, "same_name");
         var admin = SeedAdmin(db, UserPermission.ServerOwner);
 
-        var handler = new RenamePlayerHandler(db);
+        var handler = new RenamePlayerHandler(db, new RecordingPlayerCacheInvalidation());
         var result = await handler.HandleAsync(new RenamePlayerCommand
         {
             ActorUid = admin.Uid,
@@ -187,7 +187,7 @@ public class PlayerAdminHandlerTests
         var (_, pid) = SeedPlayer(db, "tier_guard");
         var moderator = SeedAdmin(db, UserPermission.ServerModerator);
 
-        var handler = new RenamePlayerHandler(db);
+        var handler = new RenamePlayerHandler(db, new RecordingPlayerCacheInvalidation());
         var result = await handler.HandleAsync(new RenamePlayerCommand
         {
             ActorUid = moderator.Uid,
@@ -205,7 +205,7 @@ public class PlayerAdminHandlerTests
         using var db = CreateInMemoryDbContext();
         var admin = SeedAdmin(db, UserPermission.ServerOwner);
 
-        var handler = new ResetPlayerTextureHandler(db);
+        var handler = new ResetPlayerTextureHandler(db, new RecordingPlayerCacheInvalidation());
         var result = await handler.HandleAsync(new ResetPlayerTextureCommand
         {
             ActorUid = admin.Uid,
@@ -214,5 +214,46 @@ public class PlayerAdminHandlerTests
 
         Assert.False(result.IsSuccess);
         Assert.Equal("玩家不存在", result.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task ResetTexture_Success_InvalidatesPlayerCache()
+    {
+        using var db = CreateInMemoryDbContext();
+        var (_, pid) = SeedPlayer(db, "tex_wire", tidSkin: 7);
+        var admin = SeedAdmin(db, UserPermission.ServerOwner);
+        var uuid = db.Players.First(p => p.Pid == pid).Uuid;
+        var cache = new RecordingPlayerCacheInvalidation();
+
+        var handler = new ResetPlayerTextureHandler(db, cache);
+        var result = await handler.HandleAsync(new ResetPlayerTextureCommand
+        {
+            ActorUid = admin.Uid,
+            Pid = pid
+        });
+
+        Assert.True(result.IsSuccess, result.ErrorMessage);
+        Assert.Equal(uuid, Assert.Single(cache.InvalidatedUuids));
+    }
+
+    [Fact]
+    public async Task Rename_Success_InvalidatesPlayerCacheByUuid()
+    {
+        using var db = CreateInMemoryDbContext();
+        var (_, pid) = SeedPlayer(db, "wire_old");
+        var admin = SeedAdmin(db, UserPermission.ServerOwner);
+        var uuid = db.Players.First(p => p.Pid == pid).Uuid;
+        var cache = new RecordingPlayerCacheInvalidation();
+
+        var handler = new RenamePlayerHandler(db, cache);
+        var result = await handler.HandleAsync(new RenamePlayerCommand
+        {
+            ActorUid = admin.Uid,
+            Pid = pid,
+            NewName = "wire_new"
+        });
+
+        Assert.True(result.IsSuccess, result.ErrorMessage);
+        Assert.Equal(uuid, Assert.Single(cache.InvalidatedUuids));
     }
 }

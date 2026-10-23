@@ -102,7 +102,7 @@ public class UnbanPlayerIntegrationTests : IAsyncLifetime
         var (ownerUid, pid) = SeedBannedPlayer(db, rid, "unb");
         var admin = SeedOwnerAdmin(db, rid);
 
-        var handler = new UnbanPlayerHandler(db);
+        var handler = new UnbanPlayerHandler(db, new RecordingPlayerCacheInvalidation());
         var result = await handler.HandleAsync(new UnbanPlayerCommand
         {
             ActorUid = admin.Uid,
@@ -115,6 +115,27 @@ public class UnbanPlayerIntegrationTests : IAsyncLifetime
         Assert.False((await db.Players.AsNoTracking().FirstAsync(p => p.Pid == pid)).IsBanned);
         Assert.Equal(0, await db.PlayerBans.CountAsync(b => b.Pid == pid && b.IsActive));
         Assert.Contains(db.AuthLogs.Local, l => l.Action == "player-unban" && l.SubjectId == ownerUid);
+    }
+
+    [Fact]
+    public async Task Unban_BannedPlayer_InvalidatesPlayerCache()
+    {
+        using var db = CreateContext();
+        var rid = Guid.NewGuid().ToString("N")[..8];
+        var (_, pid) = SeedBannedPlayer(db, rid, "unw");
+        var admin = SeedOwnerAdmin(db, rid);
+        var uuid = (await db.Players.AsNoTracking().FirstAsync(p => p.Pid == pid)).Uuid;
+        var cache = new RecordingPlayerCacheInvalidation();
+
+        var handler = new UnbanPlayerHandler(db, cache);
+        var result = await handler.HandleAsync(new UnbanPlayerCommand
+        {
+            ActorUid = admin.Uid,
+            Pid = pid
+        });
+
+        Assert.True(result.IsSuccess, result.ErrorMessage);
+        Assert.Equal(uuid, Assert.Single(cache.InvalidatedUuids));
     }
 
     [Fact]
@@ -137,7 +158,7 @@ public class UnbanPlayerIntegrationTests : IAsyncLifetime
         db.SaveChanges();
         var admin = SeedOwnerAdmin(db, rid);
 
-        var handler = new UnbanPlayerHandler(db);
+        var handler = new UnbanPlayerHandler(db, new RecordingPlayerCacheInvalidation());
         var result = await handler.HandleAsync(new UnbanPlayerCommand
         {
             ActorUid = admin.Uid,
@@ -166,7 +187,7 @@ public class UnbanPlayerIntegrationTests : IAsyncLifetime
         db.Users.Add(moderator);
         db.SaveChanges();
 
-        var handler = new UnbanPlayerHandler(db);
+        var handler = new UnbanPlayerHandler(db, new RecordingPlayerCacheInvalidation());
         var result = await handler.HandleAsync(new UnbanPlayerCommand
         {
             ActorUid = moderator.Uid,

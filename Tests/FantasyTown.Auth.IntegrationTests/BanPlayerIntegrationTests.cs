@@ -91,7 +91,7 @@ public class BanPlayerIntegrationTests : IAsyncLifetime
         var (ownerUid, pid) = SeedOwnerWithPlayer(db, rid, "pbn");
         var admin = SeedAdmin(db, rid, UserPermission.ServerOwner);
 
-        var handler = new BanPlayerHandler(db);
+        var handler = new BanPlayerHandler(db, new RecordingPlayerCacheInvalidation(), new RecordingTokenRevocation());
         var result = await handler.HandleAsync(new BanPlayerCommand
         {
             ActorUid = admin.Uid,
@@ -107,13 +107,40 @@ public class BanPlayerIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Ban_Succeeds_InvalidatesPlayerCacheAndRevokesOwnerTokens()
+    {
+        using var db = CreateContext();
+        var rid = Guid.NewGuid().ToString("N")[..8];
+        var (ownerUid, pid) = SeedOwnerWithPlayer(db, rid, "pbw");
+        var admin = SeedAdmin(db, rid, UserPermission.ServerOwner);
+        var uuid = (await db.Players.AsNoTracking().FirstAsync(p => p.Pid == pid)).Uuid;
+        var ownerEmail = await db.Users.AsNoTracking()
+            .Where(u => u.Uid == ownerUid).Select(u => u.Email).FirstAsync();
+        var cache = new RecordingPlayerCacheInvalidation();
+        var tokens = new RecordingTokenRevocation();
+
+        var handler = new BanPlayerHandler(db, cache, tokens);
+        var result = await handler.HandleAsync(new BanPlayerCommand
+        {
+            ActorUid = admin.Uid,
+            Pid = pid,
+            Reason = "wire ban"
+        });
+
+        Assert.True(result.IsSuccess, result.ErrorMessage);
+        Assert.Equal(uuid, Assert.Single(cache.InvalidatedUuids));
+        // 一用户一角色：吊销属主全部令牌即吊销 selectedProfile 令牌（§7.3）
+        Assert.Equal(ownerEmail, Assert.Single(tokens.RevokedEmails));
+    }
+
+    [Fact]
     public async Task Ban_Twice_ReturnsConflictWithSingleActiveRecord()
     {
         using var db = CreateContext();
         var rid = Guid.NewGuid().ToString("N")[..8];
         var (_, pid) = SeedOwnerWithPlayer(db, rid, "pbt");
         var admin = SeedAdmin(db, rid, UserPermission.ServerOwner);
-        var handler = new BanPlayerHandler(db);
+        var handler = new BanPlayerHandler(db, new RecordingPlayerCacheInvalidation(), new RecordingTokenRevocation());
 
         var until = DateTime.UtcNow.AddDays(3);
         Assert.True((await handler.HandleAsync(new BanPlayerCommand
@@ -160,7 +187,7 @@ public class BanPlayerIntegrationTests : IAsyncLifetime
         });
         await db.SaveChangesAsync();
 
-        var handler = new BanPlayerHandler(db);
+        var handler = new BanPlayerHandler(db, new RecordingPlayerCacheInvalidation(), new RecordingTokenRevocation());
         var result = await handler.HandleAsync(new BanPlayerCommand
         {
             ActorUid = admin.Uid,
@@ -185,7 +212,7 @@ public class BanPlayerIntegrationTests : IAsyncLifetime
         await db.SaveChangesAsync();
         var moderator = SeedAdmin(db, rid, UserPermission.ServerModerator);
 
-        var handler = new BanPlayerHandler(db);
+        var handler = new BanPlayerHandler(db, new RecordingPlayerCacheInvalidation(), new RecordingTokenRevocation());
         var result = await handler.HandleAsync(new BanPlayerCommand
         {
             ActorUid = moderator.Uid,
@@ -209,7 +236,7 @@ public class BanPlayerIntegrationTests : IAsyncLifetime
         db.Users.First(u => u.Uid == ownerUid).Permission = UserPermission.ServerOwner;
         await db.SaveChangesAsync();
 
-        var handler = new BanPlayerHandler(db);
+        var handler = new BanPlayerHandler(db, new RecordingPlayerCacheInvalidation(), new RecordingTokenRevocation());
         var result = await handler.HandleAsync(new BanPlayerCommand
         {
             ActorUid = ownerUid,

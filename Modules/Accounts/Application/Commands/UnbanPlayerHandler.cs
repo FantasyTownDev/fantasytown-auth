@@ -1,4 +1,5 @@
 using FantasyTown.Auth.Modules.Accounts.Domain;
+using FantasyTown.Auth.Modules.Shared;
 using FantasyTown.Auth.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,15 +9,17 @@ namespace FantasyTown.Auth.Modules.Accounts.Application.Commands;
 /// 玩家解封处理器（V5 §5.3 与封禁对称）：
 /// 条件更新 players.is_banned: true→false + 同事务翻转唯一 active 记录；
 /// 0 行 = 目标本就未处于封禁 → 幂等成功（防错 #7）。
-/// 副作用 DEL PLAYER/PROFILE 随 Step 5 H5 经 Shared 接口接入。
+/// 副作用（H5）：DEL PLAYER:{uuid}——解封即时反映到 join/hasJoined 封禁闸门。
 /// </summary>
 public sealed class UnbanPlayerHandler
 {
     private readonly AuthDbContext _db;
+    private readonly IPlayerCacheInvalidation _playerCacheInvalidation;
 
-    public UnbanPlayerHandler(AuthDbContext db)
+    public UnbanPlayerHandler(AuthDbContext db, IPlayerCacheInvalidation playerCacheInvalidation)
     {
         _db = db;
+        _playerCacheInvalidation = playerCacheInvalidation;
     }
 
     public async Task<UnbanPlayerResult> HandleAsync(
@@ -59,7 +62,8 @@ public sealed class UnbanPlayerHandler
         });
         await _db.SaveChangesAsync(cancellationToken);
 
-        // TODO(Step 5 H5)：DEL PLAYER:{uuid} / PROFILE:{uuid}——经 Shared 接口接入（审计 H5）
+        // 副作用（H5）：失效 PLAYER:{uuid}，解封即时反映到 join/hasJoined 封禁闸门
+        await _playerCacheInvalidation.InvalidatePlayerAsync(gate.Player!.Uuid, cancellationToken);
 
         return UnbanPlayerResult.Success(affected > 0, priorBanCount);
     }

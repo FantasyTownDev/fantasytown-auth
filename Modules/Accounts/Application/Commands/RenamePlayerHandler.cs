@@ -1,4 +1,5 @@
 using FantasyTown.Auth.Modules.Accounts.Domain;
+using FantasyTown.Auth.Modules.Shared;
 using FantasyTown.Auth.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,15 +9,18 @@ namespace FantasyTown.Auth.Modules.Accounts.Application.Commands;
 /// 玩家改名处理器（V5 §7.3）：
 /// 角色名规范校验（与注册同规则）+ DB UNIQUE 冲突捕获（防错 #16：直接更新捕获 1062，无预查）
 /// + 更新 last_modified + 审计 player-rename（context 含旧名到新名）；uuid 不变（映射稳定）。
-/// 副作用 DEL PLAYER/PROFILE/NAME:{旧名} 随 Step 5 H5 经 Shared 接口接入。
+/// 副作用（H5）：DEL PLAYER:{uuid}——快照内含 Name，uuid 不变仍须失效；PROFILE 载荷键随
+/// last_modified 换键自失效；NAME:{旧名} 反查键待 NAME 反查缓存轨道落地后在此补失效。
 /// </summary>
 public sealed class RenamePlayerHandler
 {
     private readonly AuthDbContext _db;
+    private readonly IPlayerCacheInvalidation _playerCacheInvalidation;
 
-    public RenamePlayerHandler(AuthDbContext db)
+    public RenamePlayerHandler(AuthDbContext db, IPlayerCacheInvalidation playerCacheInvalidation)
     {
         _db = db;
+        _playerCacheInvalidation = playerCacheInvalidation;
     }
 
     public async Task<RenamePlayerResult> HandleAsync(
@@ -61,7 +65,9 @@ public sealed class RenamePlayerHandler
         });
         await _db.SaveChangesAsync(cancellationToken);
 
-        // TODO(Step 5 H5)：DEL PLAYER:{uuid} / PROFILE:{uuid} / NAME:{旧名}——经 Shared 接口接入（审计 H5）
+        // 副作用（H5）：失效 PLAYER:{uuid}——快照内含 Name，改名后必须清除；
+        // NAME:{旧名} 反查键待 NAME 反查缓存落地后在此补失效
+        await _playerCacheInvalidation.InvalidatePlayerAsync(player.Uuid, cancellationToken);
 
         return RenamePlayerResult.Success(oldName);
     }
