@@ -57,8 +57,9 @@ public static class AuthenticateEndpoint
             var ipLimiter = context.RequestServices.GetRequiredService<IRateLimiter>();
             if (!await ipLimiter.IsAllowedAsync(clientIp))
             {
+                // T3-014：不向客户端泄露内部限流机制，统一 ForbiddenOperationException 默认文案
                 context.Response.StatusCode = StatusCodes.Status403Forbidden;
-                await context.Response.WriteAsJsonAsync(YggErrorResponse.Forbidden("Rate limit exceeded."));
+                await context.Response.WriteAsJsonAsync(YggErrorResponse.Forbidden());
                 return;
             }
 

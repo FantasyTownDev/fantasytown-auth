@@ -43,7 +43,8 @@ public sealed class AuthenticateHandler
         // 0. 并发许可检查
         if (!_concurrencyLimiter.TryAcquire())
         {
-            return AuthenticateResult.Forbidden("Rate limit exceeded. Too many concurrent requests.");
+            // T3-014：不向客户端泄露内部并发调度细节，统一文案
+            return AuthenticateResult.Forbidden("Forbidden.");
         }
 
         try
