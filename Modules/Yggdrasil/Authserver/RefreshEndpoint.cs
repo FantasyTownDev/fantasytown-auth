@@ -23,7 +23,7 @@ public static class RefreshEndpoint
             if (string.IsNullOrWhiteSpace(rawBody))
             {
                 context.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await context.Response.WriteAsJsonAsync(new { error = "json", errorMessage = "Invalid request body." });
+                await context.Response.WriteAsJsonAsync(YggErrorResponse.MalformedRequest());
                 return;
             }
 
@@ -36,14 +36,14 @@ public static class RefreshEndpoint
             catch (JsonException)
             {
                 context.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await context.Response.WriteAsJsonAsync(new { error = "json", errorMessage = "Invalid request body." });
+                await context.Response.WriteAsJsonAsync(YggErrorResponse.MalformedRequest());
                 return;
             }
 
             if (request == null || request.AccessToken == null)
             {
                 context.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await context.Response.WriteAsJsonAsync(new { error = "json", errorMessage = "Invalid request body." });
+                await context.Response.WriteAsJsonAsync(YggErrorResponse.MalformedRequest());
                 return;
             }
 

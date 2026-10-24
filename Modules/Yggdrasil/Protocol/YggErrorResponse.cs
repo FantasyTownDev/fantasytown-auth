@@ -37,4 +37,14 @@ public sealed record YggErrorResponse
         Error = "Unsupported Media Type",
         ErrorMessage = "Invalid request body. Content-Type must be application/json."
     };
+
+    /// <summary>
+    /// 请求体缺失/JSON 解析失败（T3-015：统一走冻结错误格式，
+    /// error 用 Yggdrasil 官方 IllegalArgumentException 类型，不再内联匿名对象）。
+    /// </summary>
+    public static YggErrorResponse MalformedRequest() => new()
+    {
+        Error = "IllegalArgumentException",
+        ErrorMessage = "Invalid request body."
+    };
 }
