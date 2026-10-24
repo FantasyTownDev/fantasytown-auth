@@ -433,6 +433,12 @@ public class InMemoryLockoutService : ILockoutService
         return Task.CompletedTask;
     }
 
+    public Task<bool> ClearAsync(int uid, CancellationToken cancellationToken = default)
+    {
+        var existed = _lockouts.Remove(uid);
+        return Task.FromResult(existed);
+    }
+
     public Task LockAsync(int uid, TimeSpan duration, CancellationToken cancellationToken = default)
     {
         _lockouts[uid] = (5, DateTime.UtcNow.Add(duration));

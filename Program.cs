@@ -89,7 +89,8 @@ builder.Services.AddScoped<IPasswordService, Argon2PasswordService>();
 builder.Services.AddScoped<IPermissionSnapshot, RedisPermissionSnapshot>();
 builder.Services.AddScoped<ILockoutService, RedisLockoutService>();
 // 站点选项（V5 配置表 options 项；DB 表热加载随 options 轨道接入）
-builder.Services.AddSingleton(new SiteOptions());
+// 绑定自 SiteOptions 配置节（appsettings / 环境变量），空节回退默认值
+builder.Services.AddSingleton(builder.Configuration.GetSection("SiteOptions").Get<SiteOptions>() ?? new SiteOptions());
 // 注册配额（V5 §3.4 REG_IP:{ip}，软配额前置粗检 + 成功后计数）
 builder.Services.AddScoped<IRegistrationQuotaService>(sp =>
     new RedisRegistrationQuotaService(
