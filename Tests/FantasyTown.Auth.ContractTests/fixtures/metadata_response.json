@@ -1,1 +1,1 @@
-{"skinDomains":["example.com","*.example.com"],"signaturePublickey":"-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA...","timestamp":1234567890}
+{"meta":{"serverName":"FantasyTown","serverId":1,"implementationName":"FantasyTown.Auth","implementationVersion":"1.0.0"},"skinDomains":["<dynamic>"],"signaturePublickey":"<dynamic>"}

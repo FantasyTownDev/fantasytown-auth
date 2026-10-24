@@ -1,1 +1,1 @@
-{"accessToken":"test-access-token","clientToken":"test-client-token","availableProfiles":[{"id":"abcd1234","name":"TestPlayer"}],"selectedProfile":{"id":"abcd1234","name":"TestPlayer"},"user":null}
+{"accessToken":"<dynamic>","clientToken":"<dynamic>","availableProfiles":[{"id":"<dynamic>","name":"<dynamic>"}],"selectedProfile":{"id":"<dynamic>","name":"<dynamic>"},"user":null}
