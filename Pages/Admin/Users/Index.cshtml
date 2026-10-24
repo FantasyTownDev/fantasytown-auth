@@ -1,0 +1,48 @@
+@page
+@model FantasyTown.Auth.Pages.Admin.Users.UsersIndexModel
+@{
+    ViewData["Title"] = "用户管理";
+}
+
+<h1>用户管理</h1>
+
+<form method="get" class="searchbar">
+    <input type="text" name="search" value="@Model.Search" placeholder="邮箱关键字" />
+    <button type="submit">搜索</button>
+    <span class="muted">最多显示 100 条</span>
+</form>
+
+@if (Model.Rows.Count == 0)
+{
+    <p class="muted">无匹配用户</p>
+}
+else
+{
+    <table>
+        <tr><th>UID</th><th>邮箱</th><th>权限</th><th>状态</th><th>玩家数</th><th></th></tr>
+        @foreach (var row in Model.Rows)
+        {
+            <tr>
+                <td>@row.Uid</td>
+                <td>@row.Email</td>
+                <td>@row.Permission</td>
+                <td>
+                    @if (row.IsBanned)
+                    {
+                        <span class="badge badge-banned">封禁</span>
+                    }
+                    @if (row.IsDeleted)
+                    {
+                        <span class="badge badge-banned">已软删</span>
+                    }
+                    @if (!row.IsBanned && !row.IsDeleted)
+                    {
+                        <span class="badge badge-ok">正常</span>
+                    }
+                </td>
+                <td>@row.PlayerCount</td>
+                <td><a href="/admin/users/@row.Uid" style="color:#00d4ff;">详情</a></td>
+            </tr>
+        }
+    </table>
+}

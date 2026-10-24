@@ -2,6 +2,7 @@ using FantasyTown.Auth.Modules.Accounts.Application.Commands;
 using FantasyTown.Auth.Modules.Accounts.Application.Queries;
 using FantasyTown.Auth.Modules.Accounts.Domain;
 using FantasyTown.Auth.Modules.Accounts.Infrastructure;
+using FantasyTown.Auth.Modules.Shared;
 using FantasyTown.Auth.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -23,7 +24,7 @@ public class LoginHandlerTests
 
     private async Task<int> CreateTestUser(AuthDbContext db, string username = "testuser", string email = "test@example.com", string password = "Password123!")
     {
-        var registerHandler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService());
+        var registerHandler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService(), new SiteOptions(), new InlineOwnerClaimLock());
         var result = await registerHandler.HandleAsync(new RegisterUserCommand
         {
             Username = username,

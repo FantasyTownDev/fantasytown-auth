@@ -6,6 +6,7 @@ namespace FantasyTown.Auth.IntegrationTests;
 /// 并发令牌测试（需要 Redis 或 Docker）
 /// </summary>
 [Trait("Category", "Integration")]
+[Collection("MariaDB")]
 public class ConcurrentTokenTests
 {
     [Fact]
