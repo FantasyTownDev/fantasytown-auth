@@ -8,6 +8,7 @@ namespace FantasyTown.Auth.IntegrationTests;
 /// 并发封禁测试（需要 MariaDB 或 Docker）
 /// </summary>
 [Trait("Category", "Integration")]
+[Collection("MariaDB")]
 public class ConcurrentBanTests : IAsyncLifetime
 {
     private string _connectionString = null!;
@@ -16,7 +17,7 @@ public class ConcurrentBanTests : IAsyncLifetime
     {
         if (DockerHelper.IsAvailable())
         {
-            var container = new Testcontainers.MySql.MySqlBuilder()
+            var container = new Testcontainers.MySql.MySqlBuilder("mysql:8.4")
                 .WithDatabase("fantasytown_test")
                 .WithUsername("test")
                 .WithPassword("test")

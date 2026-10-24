@@ -29,7 +29,7 @@ public class AuthenticateHandlerTests : IDisposable
 
         var yggOptions = new YggOptions();
         var concurrencyLimiter = new AuthConcurrencyLimiter();
-        _handler = new AuthenticateHandler(_db, _passwordService, _permissionSnapshot, _lockoutService, _tokenService, yggOptions, concurrencyLimiter);
+        _handler = new AuthenticateHandler(new TestPlayerDirectory(_db), _passwordService, _permissionSnapshot, _lockoutService, _tokenService, yggOptions, concurrencyLimiter);
     }
 
     public void Dispose()
@@ -431,6 +431,12 @@ public class InMemoryLockoutService : ILockoutService
         _lockouts.Remove(uid);
         _windows.Remove($"FAIL_EP:{email}:{ip}");
         return Task.CompletedTask;
+    }
+
+    public Task<bool> ClearAsync(int uid, CancellationToken cancellationToken = default)
+    {
+        var existed = _lockouts.Remove(uid);
+        return Task.FromResult(existed);
     }
 
     public Task LockAsync(int uid, TimeSpan duration, CancellationToken cancellationToken = default)

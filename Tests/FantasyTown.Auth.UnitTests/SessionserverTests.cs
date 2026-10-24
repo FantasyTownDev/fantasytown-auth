@@ -336,7 +336,7 @@ public class HasJoinedHandlerTests : IDisposable
         _ticketService = new InMemoryTicketService();
         _playerCache = new InMemoryPlayerCache();
         _signingService = new InMemorySigningService();
-        _handler = new HasJoinedHandler(_db, _ticketService, _playerCache, _signingService, new YggOptions());
+        _handler = new HasJoinedHandler(new TestPlayerDirectory(_db), _ticketService, _playerCache, _signingService, new YggOptions());
     }
 
     public void Dispose() => _db.Dispose();
@@ -496,7 +496,7 @@ public class ProfileHandlerTests : IDisposable
         _db = new AuthDbContext(options);
         _playerCache = new InMemoryPlayerCache();
         _signingService = new InMemorySigningService();
-        _handler = new ProfileHandler(_db, _playerCache, _signingService, new YggOptions());
+        _handler = new ProfileHandler(new TestPlayerDirectory(_db), _playerCache, _signingService, new YggOptions());
     }
 
     public void Dispose() => _db.Dispose();

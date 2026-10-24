@@ -1,0 +1,108 @@
+@page
+@model FantasyTown.Auth.Pages.Admin.PlayersDetailModel
+@{
+    ViewData["Title"] = "玩家详情";
+    var player = Model.Player;
+    var bannedBadge = player.IsBanned
+        ? "<span class=\"badge badge-banned\">封禁中</span>"
+        : "<span class=\"badge badge-ok\">正常</span>";
+}
+
+<h1>玩家详情 <small class="muted">#@player.Pid</small></h1>
+
+<div class="panel">
+    <table>
+        <tr><th>角色名</th><th>UUID</th><th>状态</th><th>皮肤 TID</th><th>最后更新 (UTC)</th></tr>
+        <tr>
+            <td>@player.Name</td>
+            <td class="muted">@player.Uuid</td>
+            <td>@Html.Raw(bannedBadge)</td>
+            <td>@(player.TidSkin?.ToString() ?? "—")</td>
+            <td>@player.LastModified.ToString("yyyy-MM-dd HH:mm:ss")</td>
+        </tr>
+    </table>
+    <p>
+        属主：<a href="/admin/users/@Model.Owner.Uid" style="color:#00d4ff;">@Model.Owner.Email</a>
+        @if (Model.Owner.IsDeleted)
+        {
+            <span class="badge badge-banned">已软删</span>
+        }
+        （权限：@Model.Owner.Permission）
+    </p>
+</div>
+
+@if (Model.CanModerate || Model.CanRename)
+{
+    <div class="panel">
+        <h2>操作</h2>
+        @if (Model.CanModerate)
+        {
+            <form method="post" asp-antiforgery="true" action="/admin/players/@player.Pid/ban" class="inline">
+                <input type="hidden" name="returnUrl" value="/admin/players/@player.Pid" />
+                <input type="text" name="reason" placeholder="封禁理由" required maxlength="255" />
+                <input type="datetime-local" name="until" title="截止时间，留空为永久" />
+                <button type="submit" class="danger">封禁</button>
+            </form>
+            <form method="post" asp-antiforgery="true" action="/admin/players/@player.Pid/unban" class="inline">
+                <button type="submit">解封</button>
+            </form>
+            <form method="post" asp-antiforgery="true" action="/admin/players/@player.Pid/reset-texture" class="inline">
+                <button type="submit">重置皮肤</button>
+            </form>
+        }
+        @if (Model.CanRename)
+        {
+            <form method="post" asp-antiforgery="true" action="/admin/players/@player.Pid/rename" class="inline">
+                <input type="text" name="newName" placeholder="新角色名（3-16 位字母/数字/下划线）" required maxlength="16" />
+                <button type="submit">改名</button>
+            </form>
+        }
+    </div>
+}
+
+<div class="panel">
+    <h2>封禁历史（最近 20 条）</h2>
+    @if (Model.BanHistory.Count == 0)
+    {
+        <p class="muted">无封禁记录</p>
+    }
+    else
+    {
+        <table>
+            <tr><th>时间 (UTC)</th><th>截止</th><th>理由</th><th>操作者 UID</th><th>生效</th></tr>
+            @foreach (var ban in Model.BanHistory)
+            {
+                <tr>
+                    <td>@ban.BannedAt.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                    <td>@(ban.BannedUntil?.ToString("yyyy-MM-dd HH:mm:ss") ?? "永久")</td>
+                    <td class="muted">@ban.BannedReason</td>
+                    <td>@ban.BannedBy</td>
+                    <td>@(ban.IsActive ? "是" : "否")</td>
+                </tr>
+            }
+        </table>
+    }
+</div>
+
+<div class="panel">
+    <h2>属主近期审计（最近 20 条）</h2>
+    @if (Model.OwnerRecentLogs.Count == 0)
+    {
+        <p class="muted">无记录</p>
+    }
+    else
+    {
+        <table>
+            <tr><th>时间 (UTC)</th><th>动作</th><th>操作者</th><th>上下文</th></tr>
+            @foreach (var log in Model.OwnerRecentLogs)
+            {
+                <tr>
+                    <td>@log.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                    <td>@log.Action</td>
+                    <td>@log.ActorId</td>
+                    <td class="muted">@log.Context</td>
+                </tr>
+            }
+        </table>
+    }
+</div>

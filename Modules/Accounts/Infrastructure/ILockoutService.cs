@@ -35,6 +35,12 @@ public interface ILockoutService
     /// （FAIL_ACCT:{email} 仅审计，由窗口自然过期）
     /// </summary>
     Task ResetAsync(int uid, string email, string ip, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 管理员清除账户锁定（V5 §7.3 POST /admin/lockouts/{uid}/clear，仅 DEL LOCKOUT:{uid}，
+    /// 不触碰 FAIL_EP/FAIL_ACCT 计数）；返回是否原本处于锁定状态
+    /// </summary>
+    Task<bool> ClearAsync(int uid, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

@@ -25,7 +25,7 @@ public static class AuthenticateEndpoint
             if (string.IsNullOrWhiteSpace(rawBody))
             {
                 context.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await context.Response.WriteAsJsonAsync(new { error = "json", errorMessage = "Invalid request body." });
+                await context.Response.WriteAsJsonAsync(YggErrorResponse.MalformedRequest());
                 return;
             }
 
@@ -39,14 +39,14 @@ public static class AuthenticateEndpoint
             catch (JsonException)
             {
                 context.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await context.Response.WriteAsJsonAsync(new { error = "json", errorMessage = "Invalid request body." });
+                await context.Response.WriteAsJsonAsync(YggErrorResponse.MalformedRequest());
                 return;
             }
 
             if (request == null)
             {
                 context.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await context.Response.WriteAsJsonAsync(new { error = "json", errorMessage = "Invalid request body." });
+                await context.Response.WriteAsJsonAsync(YggErrorResponse.MalformedRequest());
                 return;
             }
 
@@ -57,8 +57,9 @@ public static class AuthenticateEndpoint
             var ipLimiter = context.RequestServices.GetRequiredService<IRateLimiter>();
             if (!await ipLimiter.IsAllowedAsync(clientIp))
             {
+                // T3-014：不向客户端泄露内部限流机制，统一 ForbiddenOperationException 默认文案
                 context.Response.StatusCode = StatusCodes.Status403Forbidden;
-                await context.Response.WriteAsJsonAsync(YggErrorResponse.Forbidden("Rate limit exceeded."));
+                await context.Response.WriteAsJsonAsync(YggErrorResponse.Forbidden());
                 return;
             }
 

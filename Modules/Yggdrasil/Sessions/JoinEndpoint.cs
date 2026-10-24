@@ -26,7 +26,7 @@ public static class JoinEndpoint
             if (string.IsNullOrWhiteSpace(rawBody))
             {
                 context.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await context.Response.WriteAsJsonAsync(new { error = "json", errorMessage = "Invalid request body." });
+                await context.Response.WriteAsJsonAsync(YggErrorResponse.MalformedRequest());
                 return;
             }
 
@@ -39,14 +39,14 @@ public static class JoinEndpoint
             catch (JsonException)
             {
                 context.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await context.Response.WriteAsJsonAsync(new { error = "json", errorMessage = "Invalid request body." });
+                await context.Response.WriteAsJsonAsync(YggErrorResponse.MalformedRequest());
                 return;
             }
 
             if (request?.AccessToken == null || request.ServerId == null)
             {
                 context.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await context.Response.WriteAsJsonAsync(new { error = "json", errorMessage = "Invalid request body." });
+                await context.Response.WriteAsJsonAsync(YggErrorResponse.MalformedRequest());
                 return;
             }
 
@@ -54,7 +54,7 @@ public static class JoinEndpoint
             if (string.IsNullOrEmpty(profileId))
             {
                 context.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await context.Response.WriteAsJsonAsync(new { error = "json", errorMessage = "Invalid request body." });
+                await context.Response.WriteAsJsonAsync(YggErrorResponse.MalformedRequest());
                 return;
             }
 

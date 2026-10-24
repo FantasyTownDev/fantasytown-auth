@@ -1,5 +1,8 @@
 using System.Net;
 using FantasyTown.Auth.Middleware;
+using FantasyTown.Auth.Modules.Accounts.Admin;
+using FantasyTown.Auth.Modules.Accounts.Application;
+using FantasyTown.Auth.Modules.Accounts.Application.Commands;
 using FantasyTown.Auth.Modules.Accounts.Infrastructure;
 using FantasyTown.Auth.Modules.Shared;
 using FantasyTown.Auth.Modules.Yggdrasil.Authserver;
@@ -84,18 +87,47 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.AccessDeniedPath = "/Account/AccessDenied";
     });
 
+// 3.1 授权策略（V5 §5.2：三策略一律读 PERM 快照，只信 uid claim——不读 Cookie Role claim）
+// 实施指导 §2.3 装配顺序：认证之后、Razor Pages 之前
+builder.Services.AddAuthorizationBuilder()
+    .AddPolicy(AdminPolicies.Moderator, p => p.RequireAssertion(ctx => AdminPolicies.EvaluateAsync(ctx, ownerTier: false)))
+    .AddPolicy(AdminPolicies.Owner, p => p.RequireAssertion(ctx => AdminPolicies.EvaluateAsync(ctx, ownerTier: true)))
+    .AddPolicy(AdminPolicies.Admin, p => p.RequireAssertion(ctx => AdminPolicies.EvaluateAsync(ctx, ownerTier: true)));
+
 // 4. 服务注册
 builder.Services.AddScoped<IPasswordService, Argon2PasswordService>();
+// 时钟抽象（策略谓词与封禁时间谓词取当前 UTC，支持确定性测试）
+builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.AddScoped<IPermissionSnapshot, RedisPermissionSnapshot>();
-builder.Services.AddScoped<ILockoutService, RedisLockoutService>();
+// H5：Yggdrasil 经 IPlayerDirectory 访问账号数据（模块纪律边界）
+builder.Services.AddScoped<IPlayerDirectory, PlayerDirectory>();
+builder.Services.AddScoped<ILockoutService>(sp => new RedisLockoutService(
+    sp.GetRequiredService<IConnectionMultiplexer>(),
+    auditDb: sp.GetRequiredService<AuthDbContext>()));
 // 站点选项（V5 配置表 options 项；DB 表热加载随 options 轨道接入）
-builder.Services.AddSingleton(new SiteOptions());
+// 绑定自 SiteOptions 配置节（appsettings / 环境变量），空节回退默认值
+builder.Services.AddSingleton(builder.Configuration.GetSection("SiteOptions").Get<SiteOptions>() ?? new SiteOptions());
 // 注册配额（V5 §3.4 REG_IP:{ip}，软配额前置粗检 + 成功后计数）
 builder.Services.AddScoped<IRegistrationQuotaService>(sp =>
     new RedisRegistrationQuotaService(
         sp.GetRequiredService<IConnectionMultiplexer>(),
         sp.GetRequiredService<SiteOptions>(),
         sp.GetRequiredService<ILogger<RedisRegistrationQuotaService>>()));
+// 管理管线（V5 §7.1：/admin 页面 HTTP 层闸门——越权矩阵 → ★二次确认；
+// Antiforgery 与策略阶段由框架承担）
+builder.Services.AddScoped<ManagementPipeline>();
+// 管理命令处理器（§7.3 页面阶段五消费；handler 内闸门为纵深防御，§7.1 原则 3）
+builder.Services.AddScoped<BanUserHandler>();
+builder.Services.AddScoped<UnbanUserHandler>();
+builder.Services.AddScoped<ChangeUserPermissionHandler>();
+builder.Services.AddScoped<ForceResetPasswordHandler>();
+builder.Services.AddScoped<ChangeUserEmailHandler>();
+builder.Services.AddScoped<SoftDeleteUserHandler>();
+builder.Services.AddScoped<ClearUserLockoutHandler>();
+builder.Services.AddScoped<BanPlayerHandler>();
+builder.Services.AddScoped<UnbanPlayerHandler>();
+builder.Services.AddScoped<ResetPlayerTextureHandler>();
+builder.Services.AddScoped<RenamePlayerHandler>();
 
 // 4.1 反代信任与客户端 IP（V5 §8：仅信任显式配置的 KnownProxies；未配置时保持直连 RemoteIpAddress 语义）
 builder.Services.AddHttpContextAccessor();
@@ -120,6 +152,23 @@ builder.Services.AddSingleton(Options.Create(forwardedHeadersOptions));
 // 5. Yggdrasil 服务
 var yggOptions = builder.Configuration.GetSection("Yggdrasil").Get<YggOptions>() ?? new YggOptions();
 builder.Services.AddSingleton(yggOptions);
+
+// T3-011：SkinBaseUrl 必须 HTTPS（§6.8 Mojang 模式纹理 value）——非开发环境启动 fail-fast，
+// Development 仅告警（本地 HTTP 环境可继续开发；/textures 重定向豁免见 T3-008）
+if (!yggOptions.SkinBaseUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+{
+    if (builder.Environment.IsDevelopment())
+    {
+        Console.Error.WriteLine(
+            $"[WARN] Yggdrasil:SkinBaseUrl 非 HTTPS（当前：{yggOptions.SkinBaseUrl}）——非开发环境将启动失败（T3-011）");
+    }
+    else
+    {
+        throw new InvalidOperationException(
+            $"Yggdrasil:SkinBaseUrl 必须以 https:// 开头（当前：{yggOptions.SkinBaseUrl}）。" +
+            "Minecraft 客户端纹理拉取要求 HTTPS（V5 §6.8 / 审计 T3-011）。");
+    }
+}
 builder.Services.AddSingleton<AuthConcurrencyLimiter>();
 builder.Services.AddSingleton<IRateLimiter>(sp =>
 {
@@ -148,6 +197,9 @@ builder.Services.AddScoped<IPlayerCache>(sp =>
     var redis = sp.GetRequiredService<IConnectionMultiplexer>();
     return new RedisPlayerCache(redis);
 });
+// H5：管理域副作用经 Shared 接口触发（Yggdrasil 实现、Accounts 消费，禁止跨模块直引类型）
+builder.Services.AddScoped<ITokenRevocation, TokenRevocationAdapter>();
+builder.Services.AddScoped<IPlayerCacheInvalidation, PlayerCacheInvalidationAdapter>();
 builder.Services.AddSingleton<ISigningService>(sp =>
 {
     var keyPath = builder.Configuration["Signing:PrivateKeyPath"] ?? "keys/signing.pem";
@@ -158,7 +210,37 @@ builder.Services.AddScoped<HasJoinedHandler>();
 builder.Services.AddScoped<ProfileHandler>();
 
 // 6. Razor Pages
-builder.Services.AddRazorPages();
+builder.Services.AddRazorPages(o =>
+{
+    // /admin 区域一刀切（V5 §7.1 原则 5，实施指导 §2.3 第 4 节）：
+    // moderator 策略文件夹级兜底 + 管线闸门过滤器；个别页面以
+    // [Authorize(Policy = AdminPolicies.Owner)] 收紧（见 §7.3 路由表）
+    o.Conventions.AuthorizeFolder("/Admin", "moderator");
+    o.Conventions.Add(new AdminGateConvention());
+
+    // §7.3 嵌套路由表：@page 模板会追加到文件路径之后（/{pid}/ban 变成 /Ban/{pid}），
+    // 故对写操作端点与详情页经 AddPageRoute 显式挂接设计路由（URL 大小写不敏感）
+    var adminRoutes = new (string Page, string Route)[]
+    {
+        ("/Admin/Players/Detail", "/Admin/Players/{pid:int}"),
+        ("/Admin/Players/Ban", "/Admin/Players/{pid:int}/Ban"),
+        ("/Admin/Players/Unban", "/Admin/Players/{pid:int}/Unban"),
+        ("/Admin/Players/ResetTexture", "/Admin/Players/{pid:int}/ResetTexture"),
+        ("/Admin/Players/Rename", "/Admin/Players/{pid:int}/Rename"),
+        ("/Admin/Users/Detail", "/Admin/Users/{uid:int}"),
+        ("/Admin/Users/Ban", "/Admin/Users/{uid:int}/Ban"),
+        ("/Admin/Users/Unban", "/Admin/Users/{uid:int}/Unban"),
+        ("/Admin/Users/Permission", "/Admin/Users/{uid:int}/Permission"),
+        ("/Admin/Users/ForceResetPassword", "/Admin/Users/{uid:int}/ForceResetPassword"),
+        ("/Admin/Users/Email", "/Admin/Users/{uid:int}/Email"),
+        ("/Admin/Users/Delete", "/Admin/Users/{uid:int}/Delete"),
+        ("/Admin/Lockouts/Clear", "/Admin/Lockouts/{uid:int}/Clear"),
+    };
+    foreach (var (page, route) in adminRoutes)
+    {
+        o.Conventions.AddPageRoute(page, route);
+    }
+});
 
 var app = builder.Build();
 
@@ -231,19 +313,29 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-app.UseHttpsRedirection();
+// T3-008：纹理端点经独立管道分支绕过 HTTPS 重定向——Minecraft 客户端不跟随 307，
+// 生产开启重定向后 /textures/* 拉取必须仍可直达（原"先注册 Map 即可"的注释为误解，
+// Map* 只注册路由并非中间件）
+app.UseWhen(
+    context => !context.Request.Path.StartsWithSegments("/textures"),
+    branch => branch.UseHttpsRedirection());
 app.UseStaticFiles();
 app.UseRouting();
 
-// 纹理端点必须在 HTTPS 重定向之前注册，Minecraft 客户端不跟随重定向
+// 纹理端点（/textures/*；重定向豁免见上方 UseWhen，T3-008）
 app.MapTextures();
 
 // 认证和授权中间件（必须在路由之后）
 app.UseAuthentication();
-app.UseAuthorization();
 
-// 封禁用户拦截中间件
-app.UseMiddleware<RejectBannedUserMiddleware>();
+// 封禁用户拦截中间件（T3-003/T3-007）：必须在 UseAuthentication 之后、
+// UseAuthorization/MapRazorPages 之前（§2.3 冻结顺序）；经 UseWhen 仅对携带
+// 认证 cookie 的请求生效，匿名流量（纹理/静态资源）不进入该分支
+app.UseWhen(
+    context => context.Request.Cookies.ContainsKey("__Host-ft_auth"),
+    branch => branch.UseMiddleware<RejectBannedUserMiddleware>());
+
+app.UseAuthorization();
 
 app.MapRazorPages();
 app.MapHealthChecks("/health");
