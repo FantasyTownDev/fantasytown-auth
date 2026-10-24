@@ -34,17 +34,17 @@
 
         @if (Model.CanManageTarget)
         {
-            <form method="post" action="/admin/users/@target.Uid/ban" class="inline">
+            <form method="post" asp-antiforgery="true" action="/admin/users/@target.Uid/ban" class="inline">
                 <input type="hidden" name="returnUrl" value="/admin/users/@target.Uid" />
                 <input type="text" name="reason" placeholder="封禁理由" required maxlength="255" />
                 <input type="datetime-local" name="until" title="截止时间，留空为永久" />
                 <button type="submit" class="danger">封禁用户</button>
             </form>
-            <form method="post" action="/admin/users/@target.Uid/unban" class="inline">
+            <form method="post" asp-antiforgery="true" action="/admin/users/@target.Uid/unban" class="inline">
                 <button type="submit">解封用户</button>
             </form>
 
-            <form method="post" action="/admin/users/@target.Uid/permission" class="inline">
+            <form method="post" asp-antiforgery="true" action="/admin/users/@target.Uid/permission" class="inline">
                 <select name="newPermission">
                     <option value="NormalPlayer">普通玩家</option>
                     <option value="ServerModerator">协管</option>
@@ -53,7 +53,7 @@
                 <button type="submit">变更权限</button>
             </form>
 
-            <form method="post" action="/admin/users/@target.Uid/email" class="inline">
+            <form method="post" asp-antiforgery="true" action="/admin/users/@target.Uid/email" class="inline">
                 <input type="email" name="newEmail" placeholder="新邮箱" required />
                 <button type="submit">改绑邮箱</button>
             </form>
@@ -61,18 +61,18 @@
 
         @if (Model.CanClearLockout)
         {
-            <form method="post" action="/admin/lockouts/@target.Uid/clear" class="inline">
+            <form method="post" asp-antiforgery="true" action="/admin/lockouts/@target.Uid/clear" class="inline">
                 <button type="submit">解除账号锁定</button>
             </form>
         }
 
         @if (Model.CanSensitive)
         {
-            <form method="post" action="/admin/users/@target.Uid/force-reset-password" class="inline">
+            <form method="post" asp-antiforgery="true" action="/admin/users/@target.Uid/force-reset-password" class="inline">
                 <input type="password" name="currentPassword" placeholder="当前密码确认（★）" required />
                 <button type="submit" class="danger">强制重置密码</button>
             </form>
-            <form method="post" action="/admin/users/@target.Uid/delete" class="inline">
+            <form method="post" asp-antiforgery="true" action="/admin/users/@target.Uid/delete" class="inline">
                 <input type="password" name="currentPassword" placeholder="当前密码确认（★）" required />
                 <button type="submit" class="danger">软删账户</button>
             </form>
