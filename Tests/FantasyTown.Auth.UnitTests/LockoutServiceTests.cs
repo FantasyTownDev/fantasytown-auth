@@ -48,3 +48,35 @@ public class InMemoryLockoutBackoffTests
         Assert.InRange((await svc.GetRemainingLockoutSecondsAsync(uid))!.Value, 3550, 3600);
     }
 }
+
+public class InMemoryLockoutClearTests
+{
+    /// <summary>
+    /// V5 §7.3 管理员清除锁定：仅删 LOCKOUT 键并返回原状态，失败计数窗保留
+    /// </summary>
+    [Fact]
+    public async Task ClearAsync_RemovesLockAndReportsPreviousState()
+    {
+        var svc = new InMemoryLockoutService();
+        var uid = 7001;
+        var email = "clear@test.com";
+        var ip = "127.0.0.1";
+
+        // 未锁定：清除返回 false
+        Assert.False(await svc.ClearAsync(uid));
+
+        for (int i = 0; i < 5; i++)
+        {
+            await svc.RecordFailureAsync(uid, email, ip);
+        }
+        Assert.True(await svc.IsLockedOutAsync(uid));
+
+        // 已锁定：清除返回 true 且解锁
+        Assert.True(await svc.ClearAsync(uid));
+        Assert.False(await svc.IsLockedOutAsync(uid));
+
+        // 失败计数窗未被触碰（再犯提醒语境）：再 1 次失败即重新达阈值
+        var result = await svc.RecordFailureAsync(uid, email, ip);
+        Assert.Equal(6, result.FailureCount);
+    }
+}

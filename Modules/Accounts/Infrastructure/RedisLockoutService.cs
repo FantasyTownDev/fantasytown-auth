@@ -129,6 +129,13 @@ return 1
         // FAIL_ACCT:{email} 仅审计，由滑动窗自然过期
     }
 
+    public async Task<bool> ClearAsync(int uid, CancellationToken cancellationToken = default)
+    {
+        var db = _redis.GetDatabase(_database);
+        // V5 §7.3：管理员清除仅删锁定键，失败计数窗保留（再犯提醒语境）
+        return await db.KeyDeleteAsync(LockoutKey(uid));
+    }
+
     private static string LockoutKey(int uid) => $"LOCKOUT:{uid}";
 }
 
@@ -215,6 +222,13 @@ public sealed class InMemoryLockoutService : ILockoutService
         _windows.Remove($"FAIL_EP:{email}:{ip}");
         // FAIL_ACCT:{email} 仅审计，由窗口自然过期
         return Task.CompletedTask;
+    }
+
+    public Task<bool> ClearAsync(int uid, CancellationToken cancellationToken = default)
+    {
+        // 镜像 Redis 实现：仅清锁定，保留失败计数窗
+        var existed = _lockouts.Remove(uid);
+        return Task.FromResult(existed);
     }
 
     private int AddWindowed(string key, long now, long windowStart)
