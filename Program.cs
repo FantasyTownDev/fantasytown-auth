@@ -99,6 +99,8 @@ builder.Services.AddScoped<IPasswordService, Argon2PasswordService>();
 // 时钟抽象（策略谓词与封禁时间谓词取当前 UTC，支持确定性测试）
 builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.AddScoped<IPermissionSnapshot, RedisPermissionSnapshot>();
+// H5：Yggdrasil 经 IPlayerDirectory 访问账号数据（模块纪律边界）
+builder.Services.AddScoped<IPlayerDirectory, PlayerDirectory>();
 builder.Services.AddScoped<ILockoutService>(sp => new RedisLockoutService(
     sp.GetRequiredService<IConnectionMultiplexer>(),
     auditDb: sp.GetRequiredService<AuthDbContext>()));
@@ -150,6 +152,23 @@ builder.Services.AddSingleton(Options.Create(forwardedHeadersOptions));
 // 5. Yggdrasil 服务
 var yggOptions = builder.Configuration.GetSection("Yggdrasil").Get<YggOptions>() ?? new YggOptions();
 builder.Services.AddSingleton(yggOptions);
+
+// T3-011：SkinBaseUrl 必须 HTTPS（§6.8 Mojang 模式纹理 value）——非开发环境启动 fail-fast，
+// Development 仅告警（本地 HTTP 环境可继续开发；/textures 重定向豁免见 T3-008）
+if (!yggOptions.SkinBaseUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+{
+    if (builder.Environment.IsDevelopment())
+    {
+        Console.Error.WriteLine(
+            $"[WARN] Yggdrasil:SkinBaseUrl 非 HTTPS（当前：{yggOptions.SkinBaseUrl}）——非开发环境将启动失败（T3-011）");
+    }
+    else
+    {
+        throw new InvalidOperationException(
+            $"Yggdrasil:SkinBaseUrl 必须以 https:// 开头（当前：{yggOptions.SkinBaseUrl}）。" +
+            "Minecraft 客户端纹理拉取要求 HTTPS（V5 §6.8 / 审计 T3-011）。");
+    }
+}
 builder.Services.AddSingleton<AuthConcurrencyLimiter>();
 builder.Services.AddSingleton<IRateLimiter>(sp =>
 {
@@ -178,6 +197,9 @@ builder.Services.AddScoped<IPlayerCache>(sp =>
     var redis = sp.GetRequiredService<IConnectionMultiplexer>();
     return new RedisPlayerCache(redis);
 });
+// H5：管理域副作用经 Shared 接口触发（Yggdrasil 实现、Accounts 消费，禁止跨模块直引类型）
+builder.Services.AddScoped<ITokenRevocation, TokenRevocationAdapter>();
+builder.Services.AddScoped<IPlayerCacheInvalidation, PlayerCacheInvalidationAdapter>();
 builder.Services.AddSingleton<ISigningService>(sp =>
 {
     var keyPath = builder.Configuration["Signing:PrivateKeyPath"] ?? "keys/signing.pem";
@@ -291,19 +313,29 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-app.UseHttpsRedirection();
+// T3-008：纹理端点经独立管道分支绕过 HTTPS 重定向——Minecraft 客户端不跟随 307，
+// 生产开启重定向后 /textures/* 拉取必须仍可直达（原"先注册 Map 即可"的注释为误解，
+// Map* 只注册路由并非中间件）
+app.UseWhen(
+    context => !context.Request.Path.StartsWithSegments("/textures"),
+    branch => branch.UseHttpsRedirection());
 app.UseStaticFiles();
 app.UseRouting();
 
-// 纹理端点必须在 HTTPS 重定向之前注册，Minecraft 客户端不跟随重定向
+// 纹理端点（/textures/*；重定向豁免见上方 UseWhen，T3-008）
 app.MapTextures();
 
 // 认证和授权中间件（必须在路由之后）
 app.UseAuthentication();
-app.UseAuthorization();
 
-// 封禁用户拦截中间件
-app.UseMiddleware<RejectBannedUserMiddleware>();
+// 封禁用户拦截中间件（T3-003/T3-007）：必须在 UseAuthentication 之后、
+// UseAuthorization/MapRazorPages 之前（§2.3 冻结顺序）；经 UseWhen 仅对携带
+// 认证 cookie 的请求生效，匿名流量（纹理/静态资源）不进入该分支
+app.UseWhen(
+    context => context.Request.Cookies.ContainsKey("__Host-ft_auth"),
+    branch => branch.UseMiddleware<RejectBannedUserMiddleware>());
+
+app.UseAuthorization();
 
 app.MapRazorPages();
 app.MapHealthChecks("/health");

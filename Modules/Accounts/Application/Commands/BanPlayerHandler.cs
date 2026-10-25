@@ -1,4 +1,5 @@
 using FantasyTown.Auth.Modules.Accounts.Domain;
+using FantasyTown.Auth.Modules.Shared;
 using FantasyTown.Auth.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,15 +9,23 @@ namespace FantasyTown.Auth.Modules.Accounts.Application.Commands;
 /// 玩家封禁处理器（V5 §5.3/§7.5）：
 /// 事务内条件更新闸门（与 IsBanEffective 同构，V5 N3）——0 行 = 目标已处封禁生效期 → 409；
 /// 成功则同事务归位旧 active 记录并插入新 player_bans（每玩家至多一条 active，V4 R2）。
-/// 副作用 DEL PLAYER/PROFILE 与令牌吊销随 Step 5 H5 经 Shared 接口接入。
+/// 副作用（H5）：DEL PLAYER:{uuid} + 吊销属主全部令牌——一用户一角色，属主令牌
+/// selectedProfile 即该玩家，全吊销即设计所称「吊销选中令牌」。
 /// </summary>
 public sealed class BanPlayerHandler
 {
     private readonly AuthDbContext _db;
+    private readonly IPlayerCacheInvalidation _playerCacheInvalidation;
+    private readonly ITokenRevocation _tokenRevocation;
 
-    public BanPlayerHandler(AuthDbContext db)
+    public BanPlayerHandler(
+        AuthDbContext db,
+        IPlayerCacheInvalidation playerCacheInvalidation,
+        ITokenRevocation tokenRevocation)
     {
         _db = db;
+        _playerCacheInvalidation = playerCacheInvalidation;
+        _tokenRevocation = tokenRevocation;
     }
 
     public async Task<BanPlayerResult> HandleAsync(
@@ -85,8 +94,10 @@ public sealed class BanPlayerHandler
         });
         await _db.SaveChangesAsync(cancellationToken);
 
-        // TODO(Step 5 H5)：DEL PLAYER:{uuid} / PROFILE:{uuid} + 若该玩家为令牌 selectedProfile 则 Lua 吊销——
-        // 经 Shared 接口接入，消除跨模块缓存访问（审计 H5）
+        // 副作用（H5）：先失效 PLAYER:{uuid}（PROFILE 载荷键含 lastModified，封禁不改材质无需动），
+        // 再经 Shared 接口吊销属主全部令牌。失败不吞——Redis 故障必须可见，静默跳过即破坏封禁即时性。
+        await _playerCacheInvalidation.InvalidatePlayerAsync(gate.Player!.Uuid, cancellationToken);
+        await _tokenRevocation.RevokeAllAsync(gate.Owner!.Email, cancellationToken);
 
         return BanPlayerResult.Success();
     }

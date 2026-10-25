@@ -1,5 +1,6 @@
 using FantasyTown.Auth.Modules.Accounts.Application.Commands;
 using FantasyTown.Auth.Modules.Accounts.Domain;
+using FantasyTown.Auth.Modules.Shared;
 using FantasyTown.Auth.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -29,7 +30,7 @@ public class ChangeUserEmailHandlerTests
     {
         using var db = CreateInMemoryDbContext();
         await SeedOwnerAndNormalAsync(db);
-        var handler = new ChangeUserEmailHandler(db);
+        var handler = new ChangeUserEmailHandler(db, new RecordingTokenRevocation());
 
         var result = await handler.HandleAsync(new ChangeUserEmailCommand
         {
@@ -51,6 +52,26 @@ public class ChangeUserEmailHandlerTests
         Assert.Equal("old=user@test.com;new=newmail@test.com", log.Context);
     }
 
+    [Fact]
+    public async Task HandleAsync_ChangeEmail_RevokesOldEmailTokens()
+    {
+        using var db = CreateInMemoryDbContext();
+        await SeedOwnerAndNormalAsync(db);
+        var revocation = new RecordingTokenRevocation();
+        var handler = new ChangeUserEmailHandler(db, revocation);
+
+        var result = await handler.HandleAsync(new ChangeUserEmailCommand
+        {
+            TargetUid = 1001,
+            ActorUid = 1,
+            NewEmail = "newmail@test.com"
+        });
+
+        Assert.True(result.IsSuccess);
+        // H5：令牌链以 ID:{email} 为键，改绑后以旧邮箱吊销旧链
+        Assert.Equal(new[] { "user@test.com" }, revocation.RevokedEmails);
+    }
+
     [Theory]
     [InlineData("invalid-email")]
     [InlineData("@example.com")]
@@ -59,7 +80,7 @@ public class ChangeUserEmailHandlerTests
     {
         using var db = CreateInMemoryDbContext();
         await SeedOwnerAndNormalAsync(db);
-        var handler = new ChangeUserEmailHandler(db);
+        var handler = new ChangeUserEmailHandler(db, new RecordingTokenRevocation());
 
         var result = await handler.HandleAsync(new ChangeUserEmailCommand
         {
@@ -78,7 +99,7 @@ public class ChangeUserEmailHandlerTests
     {
         using var db = CreateInMemoryDbContext();
         await SeedOwnerAndNormalAsync(db);
-        var handler = new ChangeUserEmailHandler(db);
+        var handler = new ChangeUserEmailHandler(db, new RecordingTokenRevocation());
 
         var result = await handler.HandleAsync(new ChangeUserEmailCommand
         {
@@ -99,7 +120,7 @@ public class ChangeUserEmailHandlerTests
         await SeedOwnerAndNormalAsync(db);
         db.Users.Add(new User { Uid = 1002, Email = "mod@test.com", Password = "hashed", Permission = UserPermission.ServerModerator, RegisterAt = DateTime.UtcNow });
         await db.SaveChangesAsync();
-        var handler = new ChangeUserEmailHandler(db);
+        var handler = new ChangeUserEmailHandler(db, new RecordingTokenRevocation());
 
         var result = await handler.HandleAsync(new ChangeUserEmailCommand
         {
@@ -119,7 +140,7 @@ public class ChangeUserEmailHandlerTests
     {
         using var db = CreateInMemoryDbContext();
         await SeedOwnerAndNormalAsync(db);
-        var handler = new ChangeUserEmailHandler(db);
+        var handler = new ChangeUserEmailHandler(db, new RecordingTokenRevocation());
 
         var result = await handler.HandleAsync(new ChangeUserEmailCommand
         {
@@ -141,7 +162,7 @@ public class ChangeUserEmailHandlerTests
         var target = await db.Users.FirstAsync(u => u.Uid == 1001);
         target.IsDeleted = true;
         await db.SaveChangesAsync();
-        var handler = new ChangeUserEmailHandler(db);
+        var handler = new ChangeUserEmailHandler(db, new RecordingTokenRevocation());
 
         var result = await handler.HandleAsync(new ChangeUserEmailCommand
         {

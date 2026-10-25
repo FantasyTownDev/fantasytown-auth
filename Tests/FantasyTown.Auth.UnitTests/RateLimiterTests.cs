@@ -217,7 +217,7 @@ public class AuthenticateHandlerConcurrencyTests : IDisposable
         var tasks = new List<Task<AuthenticateResult>>();
         for (int i = 0; i < 2; i++)
         {
-            var handler = new AuthenticateHandler(_db, _passwordService, _permissionSnapshot, _lockoutService, _tokenService, yggOptions, _concurrencyLimiter);
+            var handler = new AuthenticateHandler(new TestPlayerDirectory(_db), _passwordService, _permissionSnapshot, _lockoutService, _tokenService, yggOptions, _concurrencyLimiter);
             var request = new AuthenticateRequest
             {
                 Username = "test@test.com",
@@ -238,8 +238,8 @@ public class AuthenticateHandlerConcurrencyTests : IDisposable
         var yggOptions = new YggOptions();
         var limiter = new AuthConcurrencyLimiter(maxConcurrency: 1, queueLimit: 0);
 
-        var handler1 = new AuthenticateHandler(_db, _passwordService, _permissionSnapshot, _lockoutService, _tokenService, yggOptions, limiter);
-        var handler2 = new AuthenticateHandler(_db, _passwordService, _permissionSnapshot, _lockoutService, _tokenService, yggOptions, limiter);
+        var handler1 = new AuthenticateHandler(new TestPlayerDirectory(_db), _passwordService, _permissionSnapshot, _lockoutService, _tokenService, yggOptions, limiter);
+        var handler2 = new AuthenticateHandler(new TestPlayerDirectory(_db), _passwordService, _permissionSnapshot, _lockoutService, _tokenService, yggOptions, limiter);
 
         var request = new AuthenticateRequest
         {

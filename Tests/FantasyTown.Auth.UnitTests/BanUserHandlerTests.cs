@@ -1,6 +1,7 @@
 using FantasyTown.Auth.Modules.Accounts.Application.Commands;
 using FantasyTown.Auth.Modules.Accounts.Domain;
 using FantasyTown.Auth.Modules.Accounts.Infrastructure;
+using FantasyTown.Auth.Modules.Shared;
 using FantasyTown.Auth.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -32,7 +33,7 @@ public class BanUserHandlerTests
         await SeedOwnerAndNormalAsync(db);
         var snapshot = new InMemoryPermissionSnapshot();
         await snapshot.SetAsync(1001, new PermissionSnapshot { Permission = UserPermission.NormalPlayer });
-        var handler = new BanUserHandler(db, snapshot);
+        var handler = new BanUserHandler(db, snapshot, new RecordingTokenRevocation());
         var until = DateTime.UtcNow.AddHours(2);
 
         var result = await handler.HandleAsync(new BanUserCommand
@@ -61,11 +62,32 @@ public class BanUserHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_BanUser_RevokesTargetTokens()
+    {
+        using var db = CreateInMemoryDbContext();
+        await SeedOwnerAndNormalAsync(db);
+        var snapshot = new InMemoryPermissionSnapshot();
+        var revocation = new RecordingTokenRevocation();
+        var handler = new BanUserHandler(db, snapshot, revocation);
+
+        var result = await handler.HandleAsync(new BanUserCommand
+        {
+            TargetUid = 1001,
+            ActorUid = 1,
+            Reason = "token-revocation"
+        });
+
+        Assert.True(result.IsSuccess);
+        // H5：封禁后以目标邮箱吊销全部 Ygg 令牌
+        Assert.Equal(new[] { "user@test.com" }, revocation.RevokedEmails);
+    }
+
+    [Fact]
     public async Task HandleAsync_PermanentBan_AuditsPermanent()
     {
         using var db = CreateInMemoryDbContext();
         await SeedOwnerAndNormalAsync(db);
-        var handler = new BanUserHandler(db, new InMemoryPermissionSnapshot());
+        var handler = new BanUserHandler(db, new InMemoryPermissionSnapshot(), new RecordingTokenRevocation());
 
         var result = await handler.HandleAsync(new BanUserCommand
         {
@@ -86,7 +108,7 @@ public class BanUserHandlerTests
     {
         using var db = CreateInMemoryDbContext();
         await SeedOwnerAndNormalAsync(db);
-        var handler = new BanUserHandler(db, new InMemoryPermissionSnapshot());
+        var handler = new BanUserHandler(db, new InMemoryPermissionSnapshot(), new RecordingTokenRevocation());
 
         await handler.HandleAsync(new BanUserCommand { TargetUid = 1001, ActorUid = 1, Reason = "first" });
         var second = await handler.HandleAsync(new BanUserCommand { TargetUid = 1001, ActorUid = 1, Reason = "second" });
@@ -103,7 +125,7 @@ public class BanUserHandlerTests
         await SeedOwnerAndNormalAsync(db);
         db.Users.Add(new User { Uid = 1002, Email = "mod@test.com", Password = "hashed", Permission = UserPermission.ServerModerator, RegisterAt = DateTime.UtcNow });
         await db.SaveChangesAsync();
-        var handler = new BanUserHandler(db, new InMemoryPermissionSnapshot());
+        var handler = new BanUserHandler(db, new InMemoryPermissionSnapshot(), new RecordingTokenRevocation());
 
         // 协管封禁玩家走 player 域（§7.3 玩家封禁）；账户封禁是 owner 级操作
         var result = await handler.HandleAsync(new BanUserCommand { TargetUid = 1001, ActorUid = 1002 });
@@ -119,7 +141,7 @@ public class BanUserHandlerTests
     {
         using var db = CreateInMemoryDbContext();
         await SeedOwnerAndNormalAsync(db);
-        var handler = new BanUserHandler(db, new InMemoryPermissionSnapshot());
+        var handler = new BanUserHandler(db, new InMemoryPermissionSnapshot(), new RecordingTokenRevocation());
 
         // NotSelf：防自我封禁导致站点失控（V5 §7.2 规则二）
         var result = await handler.HandleAsync(new BanUserCommand { TargetUid = 1, ActorUid = 1 });
@@ -136,7 +158,7 @@ public class BanUserHandlerTests
         await SeedOwnerAndNormalAsync(db);
         db.Users.Add(new User { Uid = 1002, Email = "owner2@test.com", Password = "hashed", Permission = UserPermission.ServerOwner, RegisterAt = DateTime.UtcNow });
         await db.SaveChangesAsync();
-        var handler = new BanUserHandler(db, new InMemoryPermissionSnapshot());
+        var handler = new BanUserHandler(db, new InMemoryPermissionSnapshot(), new RecordingTokenRevocation());
 
         var result = await handler.HandleAsync(new BanUserCommand { TargetUid = 1002, ActorUid = 1 });
 
@@ -152,7 +174,7 @@ public class BanUserHandlerTests
         var target = await db.Users.FirstAsync(u => u.Uid == 1001);
         target.IsDeleted = true;
         await db.SaveChangesAsync();
-        var handler = new BanUserHandler(db, new InMemoryPermissionSnapshot());
+        var handler = new BanUserHandler(db, new InMemoryPermissionSnapshot(), new RecordingTokenRevocation());
 
         var result = await handler.HandleAsync(new BanUserCommand { TargetUid = 1001, ActorUid = 1 });
 

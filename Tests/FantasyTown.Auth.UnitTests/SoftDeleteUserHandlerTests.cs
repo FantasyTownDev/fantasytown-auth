@@ -1,5 +1,7 @@
 using FantasyTown.Auth.Modules.Accounts.Application.Commands;
 using FantasyTown.Auth.Modules.Accounts.Domain;
+using FantasyTown.Auth.Modules.Accounts.Infrastructure;
+using FantasyTown.Auth.Modules.Shared;
 using FantasyTown.Auth.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -56,7 +58,7 @@ public class SoftDeleteUserHandlerTests
     {
         using var db = CreateInMemoryDbContext();
         var (uid, _, _) = await SeedUserAsync(db);
-        var handler = new SoftDeleteUserHandler(db);
+        var handler = new SoftDeleteUserHandler(db, new InMemoryPermissionSnapshot(), new RecordingTokenRevocation());
 
         var result = await handler.HandleAsync(new SoftDeleteUserCommand
         {
@@ -70,11 +72,50 @@ public class SoftDeleteUserHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_SoftDelete_RevokesUserTokens()
+    {
+        using var db = CreateInMemoryDbContext();
+        var (uid, _, _) = await SeedUserAsync(db);
+        var revocation = new RecordingTokenRevocation();
+        var handler = new SoftDeleteUserHandler(db, new InMemoryPermissionSnapshot(), revocation);
+
+        var result = await handler.HandleAsync(new SoftDeleteUserCommand
+        {
+            TargetUid = uid,
+            ActorUid = 1
+        });
+
+        Assert.True(result.IsSuccess);
+        // H5：软删后以目标邮箱吊销全部 Ygg 令牌
+        Assert.Equal(new[] { "test@test.com" }, revocation.RevokedEmails);
+    }
+
+    [Fact]
+    public async Task HandleAsync_SoftDelete_RemovesPermSnapshot()
+    {
+        using var db = CreateInMemoryDbContext();
+        var (uid, _, _) = await SeedUserAsync(db);
+        var snapshot = new InMemoryPermissionSnapshot();
+        await snapshot.SetAsync(uid, new PermissionSnapshot { Permission = UserPermission.NormalPlayer });
+        var handler = new SoftDeleteUserHandler(db, snapshot, new RecordingTokenRevocation());
+
+        var result = await handler.HandleAsync(new SoftDeleteUserCommand
+        {
+            TargetUid = uid,
+            ActorUid = 1
+        });
+
+        Assert.True(result.IsSuccess);
+        // DEL PERM：软删即时失效权限快照（V5 §7.3）
+        Assert.Null(await snapshot.GetAsync(uid));
+    }
+
+    [Fact]
     public async Task HandleAsync_SoftDelete_ReleasesPlayerName()
     {
         using var db = CreateInMemoryDbContext();
         var (uid, pid, originalName) = await SeedUserAsync(db);
-        var handler = new SoftDeleteUserHandler(db);
+        var handler = new SoftDeleteUserHandler(db, new InMemoryPermissionSnapshot(), new RecordingTokenRevocation());
 
         var result = await handler.HandleAsync(new SoftDeleteUserCommand
         {
@@ -96,7 +137,7 @@ public class SoftDeleteUserHandlerTests
     {
         using var db = CreateInMemoryDbContext();
         var (uid, _, _) = await SeedUserAsync(db);
-        var handler = new SoftDeleteUserHandler(db);
+        var handler = new SoftDeleteUserHandler(db, new InMemoryPermissionSnapshot(), new RecordingTokenRevocation());
 
         await handler.HandleAsync(new SoftDeleteUserCommand
         {
@@ -116,7 +157,7 @@ public class SoftDeleteUserHandlerTests
     {
         using var db = CreateInMemoryDbContext();
         var (uid, _, _) = await SeedUserAsync(db);
-        var handler = new SoftDeleteUserHandler(db);
+        var handler = new SoftDeleteUserHandler(db, new InMemoryPermissionSnapshot(), new RecordingTokenRevocation());
 
         await handler.HandleAsync(new SoftDeleteUserCommand { TargetUid = uid, ActorUid = 1 });
         var second = await handler.HandleAsync(new SoftDeleteUserCommand { TargetUid = uid, ActorUid = 1 });
@@ -129,7 +170,7 @@ public class SoftDeleteUserHandlerTests
     public async Task HandleAsync_NonExistentUser_ReturnsFailure()
     {
         using var db = CreateInMemoryDbContext();
-        var handler = new SoftDeleteUserHandler(db);
+        var handler = new SoftDeleteUserHandler(db, new InMemoryPermissionSnapshot(), new RecordingTokenRevocation());
 
         var result = await handler.HandleAsync(new SoftDeleteUserCommand
         {
@@ -146,7 +187,7 @@ public class SoftDeleteUserHandlerTests
     {
         using var db = CreateInMemoryDbContext();
         var (uid, _, originalName) = await SeedUserAsync(db);
-        var handler = new SoftDeleteUserHandler(db);
+        var handler = new SoftDeleteUserHandler(db, new InMemoryPermissionSnapshot(), new RecordingTokenRevocation());
 
         var deleteResult = await handler.HandleAsync(new SoftDeleteUserCommand
         {
@@ -201,7 +242,7 @@ public class SoftDeleteUserHandlerTests
     {
         using var db = CreateInMemoryDbContext();
         var (uid, _, _) = await SeedUserAsync(db);
-        var handler = new SoftDeleteUserHandler(db);
+        var handler = new SoftDeleteUserHandler(db, new InMemoryPermissionSnapshot(), new RecordingTokenRevocation());
 
         var result = await handler.HandleAsync(new SoftDeleteUserCommand
         {
@@ -229,7 +270,7 @@ public class SoftDeleteUserHandlerTests
         using var db = CreateInMemoryDbContext();
         var (uid, _, _) = await SeedUserAsync(db);
         await SeedExtraUserAsync(db, 2, "mod@test.com", UserPermission.ServerModerator);
-        var handler = new SoftDeleteUserHandler(db);
+        var handler = new SoftDeleteUserHandler(db, new InMemoryPermissionSnapshot(), new RecordingTokenRevocation());
 
         var result = await handler.HandleAsync(new SoftDeleteUserCommand
         {
@@ -251,7 +292,7 @@ public class SoftDeleteUserHandlerTests
         using var db = CreateInMemoryDbContext();
         var (_, _, _) = await SeedUserAsync(db);
         await SeedExtraUserAsync(db, 1002, "owner2@test.com", UserPermission.ServerOwner);
-        var handler = new SoftDeleteUserHandler(db);
+        var handler = new SoftDeleteUserHandler(db, new InMemoryPermissionSnapshot(), new RecordingTokenRevocation());
 
         var result = await handler.HandleAsync(new SoftDeleteUserCommand
         {
@@ -272,7 +313,7 @@ public class SoftDeleteUserHandlerTests
     {
         using var db = CreateInMemoryDbContext();
         await SeedUserAsync(db);
-        var handler = new SoftDeleteUserHandler(db);
+        var handler = new SoftDeleteUserHandler(db, new InMemoryPermissionSnapshot(), new RecordingTokenRevocation());
 
         var result = await handler.HandleAsync(new SoftDeleteUserCommand
         {
@@ -294,7 +335,7 @@ public class SoftDeleteUserHandlerTests
         using var db = CreateInMemoryDbContext();
         await SeedUserAsync(db);
         await SeedExtraUserAsync(db, 1003, "mod2@test.com", UserPermission.ServerModerator);
-        var handler = new SoftDeleteUserHandler(db);
+        var handler = new SoftDeleteUserHandler(db, new InMemoryPermissionSnapshot(), new RecordingTokenRevocation());
 
         var result = await handler.HandleAsync(new SoftDeleteUserCommand
         {
@@ -315,7 +356,7 @@ public class SoftDeleteUserHandlerTests
         using var db = CreateInMemoryDbContext();
         var (uid, _, _) = await SeedUserAsync(db);
         await SeedExtraUserAsync(db, 3, "ghost@test.com", UserPermission.ServerOwner, isDeleted: true);
-        var handler = new SoftDeleteUserHandler(db);
+        var handler = new SoftDeleteUserHandler(db, new InMemoryPermissionSnapshot(), new RecordingTokenRevocation());
 
         var result = await handler.HandleAsync(new SoftDeleteUserCommand
         {

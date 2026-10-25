@@ -7,6 +7,8 @@ namespace FantasyTown.Auth.Modules.Yggdrasil.Sessions;
 /// <summary>
 /// 皮肤纹理服务端点
 /// GET /textures/skins/{uuid}.png — 返回玩家皮肤 PNG 图片
+/// 注意：Minecraft 客户端不跟随重定向——/textures/* 在 Program.cs 经 UseWhen
+/// 豁免 HTTPS 重定向（T3-008），勿在本端点前放置会重定向的中间件
 /// </summary>
 public static class TextureEndpoint
 {

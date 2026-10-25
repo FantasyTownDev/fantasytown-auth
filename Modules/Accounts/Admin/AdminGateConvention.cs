@@ -14,10 +14,13 @@ public sealed class AdminGateConvention : IPageApplicationModelConvention
 {
     public void Apply(PageApplicationModel model)
     {
-        // 路由模板形如 "Admin"（仪表盘）或 "Admin/Users/{uid}/Delete"（操作页）
-        var template = model.RouteTemplate;
-        if (string.Equals(template, "Admin", StringComparison.OrdinalIgnoreCase)
-            || (template?.StartsWith("Admin/", StringComparison.OrdinalIgnoreCase) ?? false))
+        // 全部 admin 页为纯 @page（§7.3 路由由 Program.cs AddPageRoute 挂在 PageRouteModel 上），
+        // PageApplicationModel.RouteTemplate 恒为 null——改按 "page" route value
+        // （页面应用内路径，形如 "/Admin/Users/Ban"）判定管理域归属。
+        model.ActionDescriptor.RouteValues.TryGetValue("page", out var rawPage);
+        var pagePath = (rawPage as string)?.TrimStart('/');
+        if (string.Equals(pagePath, "Admin", StringComparison.OrdinalIgnoreCase)
+            || (pagePath?.StartsWith("Admin/", StringComparison.OrdinalIgnoreCase) ?? false))
         {
             model.Filters.Add(new TypeFilterAttribute<ManagementGateFilter>());
         }

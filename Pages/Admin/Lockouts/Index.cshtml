@@ -28,7 +28,7 @@
                     <td>@row.FailureCount</td>
                     <td>@TimeSpan.FromSeconds(row.RemainingSeconds).ToString(@"hh\:mm\:ss")</td>
                     <td>
-                        <form method="post" action="/admin/lockouts/@row.Uid/clear" class="inline">
+                        <form method="post" asp-antiforgery="true" action="/admin/lockouts/@row.Uid/clear" class="inline">
                             <button type="submit">解除</button>
                         </form>
                     </td>

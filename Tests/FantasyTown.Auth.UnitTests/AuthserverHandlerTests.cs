@@ -156,7 +156,7 @@ public class SignoutHandlerTests : IDisposable
         _db = new AuthDbContext(options);
         _passwordService = new InMemoryPasswordService();
         _tokenService = new InMemoryTokenService();
-        _handler = new SignoutHandler(_db, _passwordService, _tokenService);
+        _handler = new SignoutHandler(new PlayerDirectory(_db), _passwordService, _tokenService);
     }
 
     public void Dispose()

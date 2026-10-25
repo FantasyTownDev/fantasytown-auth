@@ -1,4 +1,5 @@
 using FantasyTown.Auth.Modules.Accounts.Domain;
+using FantasyTown.Auth.Modules.Shared;
 using FantasyTown.Auth.Persistence;
 
 namespace FantasyTown.Auth.Modules.Accounts.Application.Commands;
@@ -6,15 +7,18 @@ namespace FantasyTown.Auth.Modules.Accounts.Application.Commands;
 /// <summary>
 /// 玩家重置皮肤处理器（V5 §7.3）：
 /// tid_skin=NULL + 更新 last_modified + 审计 texture-reset。
-/// 副作用 DEL PLAYER/PROFILE 随 Step 5 H5 经 Shared 接口接入。
+/// 副作用（H5）：DEL PLAYER:{uuid}——PROFILE:{uuid}:{lastModified} 载荷键随
+/// last_modified 更新换键自失效，无需显式删除。
 /// </summary>
 public sealed class ResetPlayerTextureHandler
 {
     private readonly AuthDbContext _db;
+    private readonly IPlayerCacheInvalidation _playerCacheInvalidation;
 
-    public ResetPlayerTextureHandler(AuthDbContext db)
+    public ResetPlayerTextureHandler(AuthDbContext db, IPlayerCacheInvalidation playerCacheInvalidation)
     {
         _db = db;
+        _playerCacheInvalidation = playerCacheInvalidation;
     }
 
     public async Task<ResetPlayerTextureResult> HandleAsync(
@@ -43,7 +47,8 @@ public sealed class ResetPlayerTextureHandler
         });
         await _db.SaveChangesAsync(cancellationToken);
 
-        // TODO(Step 5 H5)：DEL PLAYER:{uuid} / PROFILE:{uuid}——经 Shared 接口接入（审计 H5）
+        // 副作用（H5）：失效 PLAYER:{uuid}，重置后的材质即时反映到签名载荷
+        await _playerCacheInvalidation.InvalidatePlayerAsync(player.Uuid, cancellationToken);
 
         return ResetPlayerTextureResult.Success(hadSkin);
     }

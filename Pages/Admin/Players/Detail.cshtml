@@ -37,22 +37,22 @@
         <h2>操作</h2>
         @if (Model.CanModerate)
         {
-            <form method="post" action="/admin/players/@player.Pid/ban" class="inline">
+            <form method="post" asp-antiforgery="true" action="/admin/players/@player.Pid/ban" class="inline">
                 <input type="hidden" name="returnUrl" value="/admin/players/@player.Pid" />
                 <input type="text" name="reason" placeholder="封禁理由" required maxlength="255" />
                 <input type="datetime-local" name="until" title="截止时间，留空为永久" />
                 <button type="submit" class="danger">封禁</button>
             </form>
-            <form method="post" action="/admin/players/@player.Pid/unban" class="inline">
+            <form method="post" asp-antiforgery="true" action="/admin/players/@player.Pid/unban" class="inline">
                 <button type="submit">解封</button>
             </form>
-            <form method="post" action="/admin/players/@player.Pid/reset-texture" class="inline">
+            <form method="post" asp-antiforgery="true" action="/admin/players/@player.Pid/reset-texture" class="inline">
                 <button type="submit">重置皮肤</button>
             </form>
         }
         @if (Model.CanRename)
         {
-            <form method="post" action="/admin/players/@player.Pid/rename" class="inline">
+            <form method="post" asp-antiforgery="true" action="/admin/players/@player.Pid/rename" class="inline">
                 <input type="text" name="newName" placeholder="新角色名（3-16 位字母/数字/下划线）" required maxlength="16" />
                 <button type="submit">改名</button>
             </form>

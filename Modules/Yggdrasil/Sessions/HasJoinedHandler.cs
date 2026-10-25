@@ -1,9 +1,7 @@
 using FantasyTown.Auth.Modules.Accounts.Domain;
-using FantasyTown.Auth.Modules.Accounts.Infrastructure;
+using FantasyTown.Auth.Modules.Shared;
 using FantasyTown.Auth.Modules.Yggdrasil.Authserver;
 using FantasyTown.Auth.Modules.Yggdrasil.Protocol;
-using FantasyTown.Auth.Persistence;
-using Microsoft.EntityFrameworkCore;
 
 namespace FantasyTown.Auth.Modules.Yggdrasil.Sessions;
 
@@ -13,20 +11,20 @@ namespace FantasyTown.Auth.Modules.Yggdrasil.Sessions;
 /// </summary>
 public sealed class HasJoinedHandler
 {
-    private readonly AuthDbContext _db;
+    private readonly IPlayerDirectory _directory;
     private readonly ITicketService _ticketService;
     private readonly IPlayerCache _playerCache;
     private readonly ISigningService _signingService;
     private readonly YggOptions _yggOptions;
 
     public HasJoinedHandler(
-        AuthDbContext db,
+        IPlayerDirectory directory,
         ITicketService ticketService,
         IPlayerCache playerCache,
         ISigningService signingService,
         YggOptions yggOptions)
     {
-        _db = db;
+        _directory = directory;
         _ticketService = ticketService;
         _playerCache = playerCache;
         _signingService = signingService;
@@ -71,24 +69,22 @@ public sealed class HasJoinedHandler
 
     private async Task<PlayerSnapshot?> LoadFromDbAsync(string uuid, CancellationToken cancellationToken)
     {
-        // 回源 SQL：players LEFT JOIN 当前 active player_bans
-        var player = await _db.Players
-            .Where(p => p.Uuid == uuid)
-            .Select(p => new PlayerSnapshot
-            {
-                Name = p.Name,
-                LastModified = new DateTimeOffset(p.LastModified, TimeSpan.Zero).ToUnixTimeMilliseconds(),
-                IsBanned = p.IsBanned,
-                BannedUntil = _db.PlayerBans
-                    .Where(b => b.Pid == p.Pid && b.IsActive)
-                    .Select(b => b.BannedUntil)
-                    .FirstOrDefault(),
-                TexturesUrl = $"{_yggOptions.SkinBaseUrl}/textures/skins/{uuid}.png",
-                TexturesSignature = null
-            })
-            .FirstOrDefaultAsync(cancellationToken);
+        // 回源经 IPlayerDirectory（H5 模块纪律边界；内部回源 SQL：players LEFT JOIN 当前 active player_bans）
+        var player = await _directory.FindByUuidAsync(uuid, cancellationToken);
+        if (player == null)
+        {
+            return null;
+        }
 
-        return player;
+        return new PlayerSnapshot
+        {
+            Name = player.Name,
+            LastModified = player.LastModified.ToUnixTimeMilliseconds(),
+            IsBanned = player.IsBanned,
+            BannedUntil = player.BannedUntil?.UtcDateTime,
+            TexturesUrl = $"{_yggOptions.SkinBaseUrl}/textures/skins/{uuid}.png",
+            TexturesSignature = null
+        };
     }
 
     private SignedProfile GenerateSignedProfile(string uuid, PlayerSnapshot snapshot)
