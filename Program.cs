@@ -1,5 +1,7 @@
 using System.Net;
 using FantasyTown.Auth.Middleware;
+using FantasyTown.Auth.Modules.Accounts.Admin;
+using FantasyTown.Auth.Modules.Accounts.Application;
 using FantasyTown.Auth.Modules.Accounts.Infrastructure;
 using FantasyTown.Auth.Modules.Shared;
 using FantasyTown.Auth.Modules.Yggdrasil.Authserver;
@@ -84,8 +86,17 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.AccessDeniedPath = "/Account/AccessDenied";
     });
 
+// 3.1 授权策略（V5 §5.2：三策略一律读 PERM 快照，只信 uid claim——不读 Cookie Role claim）
+// 实施指导 §2.3 装配顺序：认证之后、Razor Pages 之前
+builder.Services.AddAuthorizationBuilder()
+    .AddPolicy(AdminPolicies.Moderator, p => p.RequireAssertion(ctx => AdminPolicies.EvaluateAsync(ctx, ownerTier: false)))
+    .AddPolicy(AdminPolicies.Owner, p => p.RequireAssertion(ctx => AdminPolicies.EvaluateAsync(ctx, ownerTier: true)))
+    .AddPolicy(AdminPolicies.Admin, p => p.RequireAssertion(ctx => AdminPolicies.EvaluateAsync(ctx, ownerTier: true)));
+
 // 4. 服务注册
 builder.Services.AddScoped<IPasswordService, Argon2PasswordService>();
+// 时钟抽象（策略谓词与封禁时间谓词取当前 UTC，支持确定性测试）
+builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.AddScoped<IPermissionSnapshot, RedisPermissionSnapshot>();
 builder.Services.AddScoped<ILockoutService, RedisLockoutService>();
 // 站点选项（V5 配置表 options 项；DB 表热加载随 options 轨道接入）
@@ -97,6 +108,9 @@ builder.Services.AddScoped<IRegistrationQuotaService>(sp =>
         sp.GetRequiredService<IConnectionMultiplexer>(),
         sp.GetRequiredService<SiteOptions>(),
         sp.GetRequiredService<ILogger<RedisRegistrationQuotaService>>()));
+// 管理管线（V5 §7.1：/admin 页面 HTTP 层闸门——越权矩阵 → ★二次确认；
+// Antiforgery 与策略阶段由框架承担）
+builder.Services.AddScoped<ManagementPipeline>();
 
 // 4.1 反代信任与客户端 IP（V5 §8：仅信任显式配置的 KnownProxies；未配置时保持直连 RemoteIpAddress 语义）
 builder.Services.AddHttpContextAccessor();
@@ -159,7 +173,14 @@ builder.Services.AddScoped<HasJoinedHandler>();
 builder.Services.AddScoped<ProfileHandler>();
 
 // 6. Razor Pages
-builder.Services.AddRazorPages();
+builder.Services.AddRazorPages(o =>
+{
+    // /admin 区域一刀切（V5 §7.1 原则 5，实施指导 §2.3 第 4 节）：
+    // moderator 策略文件夹级兜底 + 管线闸门过滤器；个别页面以
+    // [Authorize(Policy = AdminPolicies.Owner)] 收紧（见 §7.3 路由表）
+    o.Conventions.AuthorizeFolder("/Admin", "moderator");
+    o.Conventions.Add(new AdminGateConvention());
+});
 
 var app = builder.Build();
 
