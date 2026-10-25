@@ -14,8 +14,11 @@ public sealed record ManagementGateRequest
     /// <summary>操作者 UID（来自可信 uid claim）</summary>
     public required int ActorUid { get; init; }
 
-    /// <summary>目标用户 UID（来自路由）</summary>
+    /// <summary>目标用户 UID（来自路由；玩家档位下不使用）</summary>
     public required int TargetUid { get; init; }
+
+    /// <summary>目标玩家 PID（来自路由；仅玩家档位使用，§7.3 路由表 "pid"）</summary>
+    public int? TargetPid { get; init; }
 
     /// <summary>操作标识（越权拒绝审计 context，如 "permission-change"）</summary>
     public required string Operation { get; init; }
@@ -95,27 +98,53 @@ public sealed class ManagementPipeline
         CancellationToken cancellationToken = default)
     {
         // 阶段三：越权矩阵（先判"能否对该目标操作"，拒绝时闸门已落 admin-denied 审计）
-        var evaluation = request.Matrix switch
+        string? denial;
+        Domain.User? actor;
+        switch (request.Matrix)
         {
-            ManagementMatrix.OwnerUser => await AdminAuthorization.EvaluateAsync(
-                _db, request.ActorUid, request.TargetUid, request.Operation, cancellationToken),
-            ManagementMatrix.ClearLockout => await ClearLockoutAuthorization.EvaluateAsync(
-                _db, request.ActorUid, request.TargetUid, request.Operation, cancellationToken),
-            _ => throw new ArgumentOutOfRangeException(
-                nameof(request), request.Matrix, "未实现的管理矩阵档位")
-        };
+            case ManagementMatrix.OwnerUser:
+            case ManagementMatrix.ClearLockout:
+                {
+                    var evaluation = request.Matrix == ManagementMatrix.OwnerUser
+                        ? await AdminAuthorization.EvaluateAsync(
+                            _db, request.ActorUid, request.TargetUid, request.Operation, cancellationToken)
+                        : await ClearLockoutAuthorization.EvaluateAsync(
+                            _db, request.ActorUid, request.TargetUid, request.Operation, cancellationToken);
+                    denial = evaluation.Denial;
+                    actor = evaluation.Actor;
+                    break;
+                }
+            case ManagementMatrix.PlayerModerator:
+                {
+                    var evaluation = await PlayerAuthorization.EvaluateModeratorTierAsync(
+                        _db, request.ActorUid, request.TargetPid ?? 0, request.Operation, cancellationToken);
+                    denial = evaluation.Denial;
+                    actor = evaluation.Actor;
+                    break;
+                }
+            case ManagementMatrix.PlayerOwner:
+                {
+                    var evaluation = await PlayerAuthorization.EvaluateOwnerTierAsync(
+                        _db, request.ActorUid, request.TargetPid ?? 0, request.Operation, cancellationToken);
+                    denial = evaluation.Denial;
+                    actor = evaluation.Actor;
+                    break;
+                }
+            default:
+                throw new ArgumentOutOfRangeException(
+                    nameof(request), request.Matrix, "未实现的管理矩阵档位");
+        }
 
-        if (evaluation.Denial != null)
+        if (denial != null)
         {
-            return evaluation.Denial == "用户不存在"
-                ? ManagementPipelineResult.NotFound(evaluation.Denial)
-                : ManagementPipelineResult.Denied(evaluation.Denial);
+            return denial is "用户不存在" or "玩家不存在"
+                ? ManagementPipelineResult.NotFound(denial)
+                : ManagementPipelineResult.Denied(denial);
         }
 
         // 阶段四：★二次确认（actor 当前密码，恒定时间比对；失败计入 FAIL_EP + admin-denied 审计）
         if (request.Sensitive)
         {
-            var actor = evaluation.Actor;
             var confirmed = actor != null
                 && await _passwords.VerifyPasswordAsync(request.ActorCurrentPassword ?? "", actor.Password, cancellationToken);
 

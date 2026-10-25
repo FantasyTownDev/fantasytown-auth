@@ -1,3 +1,5 @@
+using FantasyTown.Auth.Modules.Accounts.Domain;
+using FantasyTown.Auth.Persistence;
 using StackExchange.Redis;
 
 namespace FantasyTown.Auth.Modules.Accounts.Infrastructure;
@@ -17,19 +19,22 @@ public sealed class RedisLockoutService : ILockoutService
     private readonly TimeSpan _window;
     private readonly TimeSpan _lockoutDuration;
     private readonly int _database;
+    private readonly AuthDbContext? _auditDb;
 
     public RedisLockoutService(
         IConnectionMultiplexer redis,
         int maxAttempts = 5,
         int windowMinutes = 15,
         int lockoutMinutes = 15,
-        int database = -1)
+        int database = -1,
+        AuthDbContext? auditDb = null)
     {
         _redis = redis;
         _maxAttempts = maxAttempts;
         _window = TimeSpan.FromMinutes(windowMinutes);
         _lockoutDuration = TimeSpan.FromMinutes(lockoutMinutes);
         _database = database;
+        _auditDb = auditDb;
     }
 
     /// <summary>
@@ -100,8 +105,25 @@ return 1
         });
         // 脚本契约：恒返回 {count, triggered}
         var result = (RedisResult[])raw!;
+        var count = (int)result[0];
+        var triggered = (int)result[1] == 1;
 
-        return new LockoutFailureResult((int)result[0], (int)result[1] == 1);
+        // V5 §6.6：锁定触发写 lockout 审计（受害账户/来源 IP/计数），供 Lockouts 派生视图
+        // 与定向攻击识别；触发后每次阈值内失败都重新触发（INCR 续期），逐次落审计
+        if (triggered && _auditDb != null)
+        {
+            _auditDb.AuthLogs.Add(new AuthLog
+            {
+                Action = "lockout",
+                SubjectId = uid,
+                Ip = ip,
+                Context = $"count={count},email={email}",
+                CreatedAt = DateTime.UtcNow
+            });
+            await _auditDb.SaveChangesAsync(cancellationToken);
+        }
+
+        return new LockoutFailureResult(count, triggered);
     }
 
     public async Task RecordUnknownAccountFailureAsync(string identifier, CancellationToken cancellationToken = default)
@@ -149,15 +171,18 @@ public sealed class InMemoryLockoutService : ILockoutService
     private readonly int _maxAttempts;
     private readonly TimeSpan _window;
     private readonly TimeSpan _lockoutDuration;
+    private readonly AuthDbContext? _auditDb;
 
     public InMemoryLockoutService(
         int maxAttempts = 5,
         int windowMinutes = 15,
-        int lockoutMinutes = 15)
+        int lockoutMinutes = 15,
+        AuthDbContext? auditDb = null)
     {
         _maxAttempts = maxAttempts;
         _window = TimeSpan.FromMinutes(windowMinutes);
         _lockoutDuration = TimeSpan.FromMinutes(lockoutMinutes);
+        _auditDb = auditDb;
     }
 
     public Task<bool> IsLockedOutAsync(int uid, CancellationToken cancellationToken = default)
@@ -196,6 +221,17 @@ public sealed class InMemoryLockoutService : ILockoutService
         {
             var nextCount = _lockouts.TryGetValue(uid, out var prev) ? prev.Count + 1 : 1;
             _lockouts[uid] = (nextCount, DateTime.UtcNow.Add(Backoff(nextCount)));
+
+            // 镜像 Redis 实现：锁定触发审计（V5 §6.6）
+            _auditDb?.AuthLogs.Add(new AuthLog
+            {
+                Action = "lockout",
+                SubjectId = uid,
+                Ip = ip,
+                Context = $"count={epCount},email={email}",
+                CreatedAt = DateTime.UtcNow
+            });
+            _auditDb?.SaveChanges();
         }
 
         return Task.FromResult(new LockoutFailureResult(epCount, triggered));

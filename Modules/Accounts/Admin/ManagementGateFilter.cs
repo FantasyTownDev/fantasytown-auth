@@ -49,11 +49,13 @@ public sealed class ManagementGateFilter : IAsyncPageFilter, IOrderedFilter
         }
 
         if (context.RouteData.Values[gate.RouteKey] is not string targetValue
-            || !int.TryParse(targetValue, out var targetUid))
+            || !int.TryParse(targetValue, out var target))
         {
             context.Result = new ObjectResult("资源不存在") { StatusCode = 404 };
             return;
         }
+
+        var isPlayerTier = gate.Matrix is ManagementMatrix.PlayerModerator or ManagementMatrix.PlayerOwner;
 
         string? actorCurrentPassword = null;
         if (gate.Sensitive)
@@ -66,7 +68,8 @@ public sealed class ManagementGateFilter : IAsyncPageFilter, IOrderedFilter
         var result = await _pipeline.EvaluateAsync(new ManagementGateRequest
         {
             ActorUid = actorUid,
-            TargetUid = targetUid,
+            TargetUid = isPlayerTier ? 0 : target,
+            TargetPid = isPlayerTier ? target : null,
             Operation = gate.Operation,
             Matrix = gate.Matrix,
             Sensitive = gate.Sensitive,

@@ -289,4 +289,110 @@ public class ManagementPipelineTests
         Assert.False(result.IsAuthorized);
         Assert.Equal(403, result.StatusCode);
     }
+
+    private static int SeedPlayer(AuthDbContext db, int ownerUid, string name = "test_player")
+    {
+        var player = new Player
+        {
+            Uid = ownerUid,
+            Name = name,
+            Uuid = Guid.NewGuid().ToString("N")
+        };
+        db.Players.Add(player);
+        db.SaveChanges();
+        return player.Pid;
+    }
+
+    [Fact]
+    public async Task PlayerModeratorMatrix_OwnerBansNormalPlayers_IsAuthorized()
+    {
+        using var db = CreateInMemoryDbContext();
+        SeedUser(db, 1, "boss@example.com", UserPermission.ServerOwner);
+        var victim = SeedUser(db, 2, "victim@example.com", UserPermission.NormalPlayer);
+        var pid = SeedPlayer(db, victim.Uid);
+        var pipeline = CreatePipeline(db, new InMemoryPasswordService(), new RecordingLockoutService());
+
+        var result = await pipeline.EvaluateAsync(new ManagementGateRequest
+        {
+            ActorUid = 1,
+            TargetUid = 0,          // 玩家档位不使用 TargetUid
+            TargetPid = pid,
+            Operation = "player-ban",
+            Matrix = ManagementMatrix.PlayerModerator,
+            Sensitive = false
+        });
+
+        Assert.True(result.IsAuthorized);
+    }
+
+    [Fact]
+    public async Task PlayerModeratorMatrix_ModeratorCannotBanOwnersPlayer()
+    {
+        using var db = CreateInMemoryDbContext();
+        SeedUser(db, 1, "mod@example.com", UserPermission.ServerModerator);
+        var boss = SeedOwner(db, uid: 2);
+        var pid = SeedPlayer(db, boss.Uid, "boss_pet");
+        var pipeline = CreatePipeline(db, new InMemoryPasswordService(), new RecordingLockoutService());
+
+        var result = await pipeline.EvaluateAsync(new ManagementGateRequest
+        {
+            ActorUid = 1,
+            TargetUid = 0,
+            TargetPid = pid,
+            Operation = "player-ban",
+            Matrix = ManagementMatrix.PlayerModerator,
+            Sensitive = false
+        });
+
+        Assert.False(result.IsAuthorized);
+        Assert.Equal(403, result.StatusCode);
+        Assert.Contains(db.AuthLogs.Local, l =>
+            l.Action == "admin-denied" && l.ActorId == 1 && l.Context == "player-ban:pid=" + pid);
+    }
+
+    [Fact]
+    public async Task PlayerModeratorMatrix_MissingPlayer_ReturnsNotFound()
+    {
+        using var db = CreateInMemoryDbContext();
+        SeedOwner(db, uid: 1);
+        var pipeline = CreatePipeline(db, new InMemoryPasswordService(), new RecordingLockoutService());
+
+        var result = await pipeline.EvaluateAsync(new ManagementGateRequest
+        {
+            ActorUid = 1,
+            TargetUid = 0,
+            TargetPid = 99999,
+            Operation = "player-ban",
+            Matrix = ManagementMatrix.PlayerModerator,
+            Sensitive = false
+        });
+
+        Assert.False(result.IsAuthorized);
+        Assert.Equal(404, result.StatusCode);
+        Assert.Equal("玩家不存在", result.DenialReason);
+    }
+
+    [Fact]
+    public async Task PlayerOwnerMatrix_ModeratorCannotRename()
+    {
+        // §7.2 玩家改名行：owner 白名单——协管即使对该玩家属主有管理权也不放行
+        using var db = CreateInMemoryDbContext();
+        SeedUser(db, 1, "mod@example.com", UserPermission.ServerModerator);
+        var victim = SeedUser(db, 2, "victim@example.com", UserPermission.NormalPlayer);
+        var pid = SeedPlayer(db, victim.Uid);
+        var pipeline = CreatePipeline(db, new InMemoryPasswordService(), new RecordingLockoutService());
+
+        var result = await pipeline.EvaluateAsync(new ManagementGateRequest
+        {
+            ActorUid = 1,
+            TargetUid = 0,
+            TargetPid = pid,
+            Operation = "player-rename",
+            Matrix = ManagementMatrix.PlayerOwner,
+            Sensitive = false
+        });
+
+        Assert.False(result.IsAuthorized);
+        Assert.Equal(403, result.StatusCode);
+    }
 }

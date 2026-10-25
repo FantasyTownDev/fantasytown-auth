@@ -2,6 +2,7 @@ using System.Net;
 using FantasyTown.Auth.Middleware;
 using FantasyTown.Auth.Modules.Accounts.Admin;
 using FantasyTown.Auth.Modules.Accounts.Application;
+using FantasyTown.Auth.Modules.Accounts.Application.Commands;
 using FantasyTown.Auth.Modules.Accounts.Infrastructure;
 using FantasyTown.Auth.Modules.Shared;
 using FantasyTown.Auth.Modules.Yggdrasil.Authserver;
@@ -98,7 +99,9 @@ builder.Services.AddScoped<IPasswordService, Argon2PasswordService>();
 // 时钟抽象（策略谓词与封禁时间谓词取当前 UTC，支持确定性测试）
 builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.AddScoped<IPermissionSnapshot, RedisPermissionSnapshot>();
-builder.Services.AddScoped<ILockoutService, RedisLockoutService>();
+builder.Services.AddScoped<ILockoutService>(sp => new RedisLockoutService(
+    sp.GetRequiredService<IConnectionMultiplexer>(),
+    auditDb: sp.GetRequiredService<AuthDbContext>()));
 // 站点选项（V5 配置表 options 项；DB 表热加载随 options 轨道接入）
 // 绑定自 SiteOptions 配置节（appsettings / 环境变量），空节回退默认值
 builder.Services.AddSingleton(builder.Configuration.GetSection("SiteOptions").Get<SiteOptions>() ?? new SiteOptions());
@@ -111,6 +114,18 @@ builder.Services.AddScoped<IRegistrationQuotaService>(sp =>
 // 管理管线（V5 §7.1：/admin 页面 HTTP 层闸门——越权矩阵 → ★二次确认；
 // Antiforgery 与策略阶段由框架承担）
 builder.Services.AddScoped<ManagementPipeline>();
+// 管理命令处理器（§7.3 页面阶段五消费；handler 内闸门为纵深防御，§7.1 原则 3）
+builder.Services.AddScoped<BanUserHandler>();
+builder.Services.AddScoped<UnbanUserHandler>();
+builder.Services.AddScoped<ChangeUserPermissionHandler>();
+builder.Services.AddScoped<ForceResetPasswordHandler>();
+builder.Services.AddScoped<ChangeUserEmailHandler>();
+builder.Services.AddScoped<SoftDeleteUserHandler>();
+builder.Services.AddScoped<ClearUserLockoutHandler>();
+builder.Services.AddScoped<BanPlayerHandler>();
+builder.Services.AddScoped<UnbanPlayerHandler>();
+builder.Services.AddScoped<ResetPlayerTextureHandler>();
+builder.Services.AddScoped<RenamePlayerHandler>();
 
 // 4.1 反代信任与客户端 IP（V5 §8：仅信任显式配置的 KnownProxies；未配置时保持直连 RemoteIpAddress 语义）
 builder.Services.AddHttpContextAccessor();
@@ -180,6 +195,29 @@ builder.Services.AddRazorPages(o =>
     // [Authorize(Policy = AdminPolicies.Owner)] 收紧（见 §7.3 路由表）
     o.Conventions.AuthorizeFolder("/Admin", "moderator");
     o.Conventions.Add(new AdminGateConvention());
+
+    // §7.3 嵌套路由表：@page 模板会追加到文件路径之后（/{pid}/ban 变成 /Ban/{pid}），
+    // 故对写操作端点与详情页经 AddPageRoute 显式挂接设计路由（URL 大小写不敏感）
+    var adminRoutes = new (string Page, string Route)[]
+    {
+        ("/Admin/Players/Detail", "/Admin/Players/{pid:int}"),
+        ("/Admin/Players/Ban", "/Admin/Players/{pid:int}/Ban"),
+        ("/Admin/Players/Unban", "/Admin/Players/{pid:int}/Unban"),
+        ("/Admin/Players/ResetTexture", "/Admin/Players/{pid:int}/ResetTexture"),
+        ("/Admin/Players/Rename", "/Admin/Players/{pid:int}/Rename"),
+        ("/Admin/Users/Detail", "/Admin/Users/{uid:int}"),
+        ("/Admin/Users/Ban", "/Admin/Users/{uid:int}/Ban"),
+        ("/Admin/Users/Unban", "/Admin/Users/{uid:int}/Unban"),
+        ("/Admin/Users/Permission", "/Admin/Users/{uid:int}/Permission"),
+        ("/Admin/Users/ForceResetPassword", "/Admin/Users/{uid:int}/ForceResetPassword"),
+        ("/Admin/Users/Email", "/Admin/Users/{uid:int}/Email"),
+        ("/Admin/Users/Delete", "/Admin/Users/{uid:int}/Delete"),
+        ("/Admin/Lockouts/Clear", "/Admin/Lockouts/{uid:int}/Clear"),
+    };
+    foreach (var (page, route) in adminRoutes)
+    {
+        o.Conventions.AddPageRoute(page, route);
+    }
 });
 
 var app = builder.Build();
