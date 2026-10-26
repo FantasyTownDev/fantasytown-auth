@@ -167,6 +167,50 @@ public class BanUserHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_BanUser_PublishesBanSignal()
+    {
+        // BAN_SIGNAL 广播接线：结构化字段供未来 Java Agent / 插件解析
+        using var db = CreateInMemoryDbContext();
+        await SeedOwnerAndNormalAsync(db);
+        var publisher = new RecordingBanSignalPublisher();
+        var handler = new BanUserHandler(db, new InMemoryPermissionSnapshot(), new RecordingTokenRevocation(), publisher);
+        var until = DateTime.UtcNow.AddHours(2);
+
+        var result = await handler.HandleAsync(new BanUserCommand
+        {
+            TargetUid = 1001,
+            ActorUid = 1,
+            Reason = "spam",
+            Until = until
+        });
+
+        Assert.True(result.IsSuccess);
+        var signal = Assert.Single(publisher.Published);
+        Assert.Equal("ban", signal.Action);
+        Assert.Equal("user", signal.Scope);
+        Assert.Equal(1001, signal.Uid);
+        Assert.Equal("user@test.com", signal.Email);
+        Assert.Equal("spam", signal.Reason);
+        Assert.Equal(until, signal.Until);
+        Assert.Equal(1, signal.OperatorUid);
+    }
+
+    [Fact]
+    public async Task HandleAsync_BanUserDenied_PublishesNothing()
+    {
+        // 授权拒绝路径不产生状态变化 → 不广播
+        using var db = CreateInMemoryDbContext();
+        await SeedOwnerAndNormalAsync(db);
+        var publisher = new RecordingBanSignalPublisher();
+        var handler = new BanUserHandler(db, new InMemoryPermissionSnapshot(), new RecordingTokenRevocation(), publisher);
+
+        var result = await handler.HandleAsync(new BanUserCommand { TargetUid = 1001, ActorUid = 1001 });
+
+        Assert.False(result.IsSuccess);
+        Assert.Empty(publisher.Published);
+    }
+
+    [Fact]
     public async Task HandleAsync_SoftDeletedTarget_Failure()
     {
         using var db = CreateInMemoryDbContext();

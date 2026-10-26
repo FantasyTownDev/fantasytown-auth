@@ -134,6 +134,39 @@ public class BanPlayerIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Ban_Succeeds_PublishesBanSignal()
+    {
+        // BAN_SIGNAL：结构化封禁信号（uuid/reason/until 供未来 Java Agent / 插件解析）
+        using var db = CreateContext();
+        var rid = Guid.NewGuid().ToString("N")[..8];
+        var (ownerUid, pid) = SeedOwnerWithPlayer(db, rid, "pbs");
+        var admin = SeedAdmin(db, rid, UserPermission.ServerOwner);
+        var publisher = new RecordingBanSignalPublisher();
+        var until = DateTime.UtcNow.AddHours(2);
+
+        var handler = new BanPlayerHandler(db, new RecordingPlayerCacheInvalidation(), new RecordingTokenRevocation(), publisher);
+        var result = await handler.HandleAsync(new BanPlayerCommand
+        {
+            ActorUid = admin.Uid,
+            Pid = pid,
+            Reason = "signal test",
+            Until = until
+        });
+
+        Assert.True(result.IsSuccess, result.ErrorMessage);
+        var signal = Assert.Single(publisher.Published);
+        Assert.Equal("ban", signal.Action);
+        Assert.Equal("player", signal.Scope);
+        Assert.Equal(pid, signal.Pid);
+        Assert.Equal(ownerUid, signal.Uid);
+        Assert.Equal(admin.Uid, signal.OperatorUid);
+        Assert.Equal("signal test", signal.Reason);
+        Assert.Equal(until, signal.Until);
+        Assert.False(string.IsNullOrEmpty(signal.Uuid));
+        Assert.False(string.IsNullOrEmpty(signal.PlayerName));
+    }
+
+    [Fact]
     public async Task Ban_Twice_ReturnsConflictWithSingleActiveRecord()
     {
         using var db = CreateContext();

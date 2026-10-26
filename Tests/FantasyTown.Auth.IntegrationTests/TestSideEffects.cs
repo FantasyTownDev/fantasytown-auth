@@ -30,3 +30,17 @@ internal sealed class RecordingTokenRevocation : ITokenRevocation
         return ValueTask.CompletedTask;
     }
 }
+
+/// <summary>
+/// IBanSignalPublisher 替身：记录封禁信号（验证封禁/解封命令的 BAN_SIGNAL 广播接线）。
+/// </summary>
+internal sealed class RecordingBanSignalPublisher : IBanSignalPublisher
+{
+    public List<BanSignal> Published { get; } = new();
+
+    public ValueTask PublishAsync(BanSignal signal, CancellationToken cancellationToken = default)
+    {
+        Published.Add(signal);
+        return ValueTask.CompletedTask;
+    }
+}
