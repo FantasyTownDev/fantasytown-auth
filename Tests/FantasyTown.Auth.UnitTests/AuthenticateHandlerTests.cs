@@ -136,7 +136,7 @@ public class AuthenticateHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task HandleAsync_BannedUser_ShouldSkipPasswordCheck()
+    public async Task HandleAsync_BannedUser_WrongPassword_ReturnsUniformCredentialsError()
     {
         var user = await CreateUser();
         await _permissionSnapshot.SetAsync(user.Uid, new PermissionSnapshot
@@ -150,6 +150,38 @@ public class AuthenticateHandlerTests : IDisposable
         var request = new AuthenticateRequest
         {
             Username = "test@test.com",
+            Password = "wrongpassword"
+        };
+
+        var result = await _handler.HandleAsync(request, "127.0.0.1");
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(403, result.StatusCode);
+        // 密码错误沿用统一话术——封禁账户与正常账户凭据错误面不可区分（防枚举，§8）；
+        // 验密照常执行（V5 §6.5 评审修订，M9 免验密随之修订）
+        Assert.Equal("Invalid credentials. Invalid username or password.", result.Error!.ErrorMessage);
+        Assert.Equal(1, _passwordService.VerifyCount);
+    }
+
+    [Fact]
+    public async Task HandleAsync_BannedUser_CorrectPassword_RevealsBanDetails()
+    {
+        var user = await CreateUser();
+        user.IsBanned = true;
+        user.BannedReason = "违规发言";
+        user.BannedUntil = DateTime.UtcNow.AddHours(1);
+        await _db.SaveChangesAsync();
+        await _permissionSnapshot.SetAsync(user.Uid, new PermissionSnapshot
+        {
+            Permission = UserPermission.NormalPlayer,
+            IsBanned = true,
+            BannedUntil = user.BannedUntil,
+            CreatedAt = DateTime.UtcNow
+        });
+
+        var request = new AuthenticateRequest
+        {
+            Username = "test@test.com",
             Password = "password123"
         };
 
@@ -157,14 +189,41 @@ public class AuthenticateHandlerTests : IDisposable
 
         Assert.False(result.IsSuccess);
         Assert.Equal(403, result.StatusCode);
-        // 密码不应该被验证
-        Assert.Equal(0, _passwordService.VerifyCount);
+        // 验密通过后才揭示封禁详情（理由 + 截止），且不签发令牌
+        Assert.StartsWith("账号已被封禁：违规发言（截止 ", result.Error!.ErrorMessage);
+        Assert.Equal(1, _passwordService.VerifyCount);
     }
 
     [Fact]
-    public async Task HandleAsync_NullSnapshot_ShouldReturnForbidden()
+    public async Task HandleAsync_BannedUser_PermanentWithoutReason_RevealsPerpetual()
     {
-        // C3 回归：null 快照 = 封禁等效哨兵，不得按"无权限记录 = 允许"放行
+        // 无理由 + 永久封禁的文案分支：账号已被封禁（永久）
+        var user = await CreateUser();
+        await _permissionSnapshot.SetAsync(user.Uid, new PermissionSnapshot
+        {
+            Permission = UserPermission.NormalPlayer,
+            IsBanned = true,
+            BannedUntil = null,
+            CreatedAt = DateTime.UtcNow
+        });
+
+        var request = new AuthenticateRequest
+        {
+            Username = "test@test.com",
+            Password = "password123"
+        };
+
+        var result = await _handler.HandleAsync(request, "127.0.0.1");
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("账号已被封禁（永久）", result.Error!.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task HandleAsync_NullSnapshot_CorrectPassword_ReturnsSentinelMessage()
+    {
+        // C3 回归：null 快照 = 封禁等效哨兵，不得按"无权限记录 = 允许"放行；
+        // 验密通过也只给状态异常文案，不伪造封禁理由
         var user = await CreateUser();
         await _permissionSnapshot.RemoveAsync(user.Uid);
 
@@ -178,6 +237,27 @@ public class AuthenticateHandlerTests : IDisposable
 
         Assert.False(result.IsSuccess);
         Assert.Equal(403, result.StatusCode);
+        Assert.Equal("账号状态异常，请联系管理员", result.Error!.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task HandleAsync_NullSnapshot_WrongPassword_ReturnsUniformCredentialsError()
+    {
+        // 哨兵 + 密码错误同样落统一话术（防枚举：哨兵面与凭据错误面不可区分）
+        var user = await CreateUser();
+        await _permissionSnapshot.RemoveAsync(user.Uid);
+
+        var request = new AuthenticateRequest
+        {
+            Username = "test@test.com",
+            Password = "wrongpassword"
+        };
+
+        var result = await _handler.HandleAsync(request, "127.0.0.1");
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("Invalid credentials. Invalid username or password.", result.Error!.ErrorMessage);
+        Assert.Equal(1, _passwordService.VerifyCount);
     }
 
     [Fact]

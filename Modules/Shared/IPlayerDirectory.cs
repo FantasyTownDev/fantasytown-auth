@@ -61,6 +61,12 @@ public sealed record AccountInfo
     /// <summary>权限级别原始字节（UserPermission 枚举值）——仅作令牌签发的元数据携带；
     /// 授权判定一律走 PERM 快照，不经此面</summary>
     public required byte Permission { get; init; }
+
+    /// <summary>封禁理由（V5 §6.5 评审修订：authenticate 验密通过后向账号持有者揭示；未封禁/无理由为 null）</summary>
+    public string? BannedReason { get; init; }
+
+    /// <summary>封禁截止时间（null = 永久封禁或未封禁）——揭示文案与判定同源一致性由写路径保证</summary>
+    public DateTime? BannedUntil { get; init; }
 }
 
 /// <summary>

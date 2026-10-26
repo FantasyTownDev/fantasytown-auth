@@ -66,7 +66,9 @@ public sealed class PlayerDirectory : IPlayerDirectory
                 Email = u.Email,
                 PasswordHash = u.Password,
                 Verified = u.Verified,
-                Permission = (byte)u.Permission
+                Permission = (byte)u.Permission,
+                BannedReason = u.BannedReason,
+                BannedUntil = u.BannedUntil
             })
             .FirstOrDefaultAsync(cancellationToken);
     }
