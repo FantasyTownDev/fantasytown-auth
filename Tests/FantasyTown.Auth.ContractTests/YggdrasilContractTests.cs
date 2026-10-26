@@ -6,6 +6,7 @@ using FantasyTown.Auth.Modules.Accounts.Infrastructure;
 using FantasyTown.Auth.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace FantasyTown.Auth.ContractTests;
@@ -195,6 +196,36 @@ public class YggdrasilContractTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         await AssertMatchesGoldenAsync(response, "authenticate_invalid_credentials.json");
+    }
+
+    [Fact]
+    public async Task Authenticate_BannedWithCorrectPassword_MatchesGoldenBanReveal()
+    {
+        // V5 §6.5 评审修订：封禁详情仅向密码持有者披露——密码正确才揭示，密码错误落统一
+        // 话术（见上一用例）；永久封禁 + 固定理由使 golden 文案无时间分量，逐字节恒定。
+        // 种子只改 user 行，走 PERM 真实回源路径（cache miss → 读行构建快照）。
+        var client = CreateClient();
+        var account = await SeedAccountAsync();
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
+            var user = await db.Users.FirstAsync(u => u.Email == account.Email);
+            user.IsBanned = true;
+            user.BannedReason = "违规内容测试";
+            user.BannedUntil = null;
+            await db.SaveChangesAsync();
+        }
+
+        var response = await client.PostAsync("/api/yggdrasil/authserver/authenticate", Json(new
+        {
+            username = account.Email,
+            password = account.Password,
+            agent = new { name = "Minecraft", version = 1 },
+        }));
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        await AssertMatchesGoldenAsync(response, "authenticate_banned.json");
     }
 
     [Fact]
