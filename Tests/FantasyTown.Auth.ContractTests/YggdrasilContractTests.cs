@@ -241,6 +241,39 @@ public class YggdrasilContractTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Authenticate_NullPasswordField_RejectedAsMalformed()
+    {
+        // H2 回归：required 对显式 null 不拦截（STJ 穿透实证）——若下沉 handler 会
+        // 抛 ArgumentNullException → 非协议 500；端点字段守卫须回 400 malformed。
+        var client = CreateClient();
+
+        var response = await client.PostAsync("/api/yggdrasil/authserver/authenticate", Json(new
+        {
+            username = "victim@example.com",
+            password = (string?)null,
+        }));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await AssertMatchesGoldenAsync(response, "malformed_request.json");
+    }
+
+    [Fact]
+    public async Task Authenticate_NullUsernameField_RejectedAsMalformed()
+    {
+        // 同 H2：username:null 此前会写 FAIL_ACCT: 空后缀键（键空间污染）。
+        var client = CreateClient();
+
+        var response = await client.PostAsync("/api/yggdrasil/authserver/authenticate", Json(new
+        {
+            username = (string?)null,
+            password = "whatever-123",
+        }));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await AssertMatchesGoldenAsync(response, "malformed_request.json");
+    }
+
+    [Fact]
     public async Task Authenticate_Success_MatchesResponseShape()
     {
         var client = CreateClient();
@@ -323,6 +356,22 @@ public class YggdrasilContractTests : IAsyncLifetime
         }));
 
         await AssertEmptyWithFixtureStatusAsync(response, "signout_success_204.json");
+    }
+
+    [Fact]
+    public async Task Signout_NullPasswordField_RejectedAsMalformed()
+    {
+        // H2 回归：signout 与 authenticate 同缺口——字段级 null 须 400 malformed 而非 500
+        var client = CreateClient();
+
+        var response = await client.PostAsync("/api/yggdrasil/authserver/signout", Json(new
+        {
+            username = "victim@example.com",
+            password = (string?)null,
+        }));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await AssertMatchesGoldenAsync(response, "malformed_request.json");
     }
 
     [Fact]

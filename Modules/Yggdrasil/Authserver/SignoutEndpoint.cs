@@ -48,6 +48,14 @@ public static class SignoutEndpoint
                 return;
             }
 
+            // 字段级 null 守卫（对齐 join/authenticate：required 对显式 null 不拦截）
+            if (request.Username == null || request.Password == null)
+            {
+                context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                await context.Response.WriteAsJsonAsync(YggErrorResponse.MalformedRequest());
+                return;
+            }
+
             var handler = context.RequestServices.GetRequiredService<SignoutHandler>();
             var result = await handler.HandleAsync(request.Username, request.Password);
 
