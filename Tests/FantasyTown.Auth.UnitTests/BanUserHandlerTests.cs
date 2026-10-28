@@ -225,4 +225,25 @@ public class BanUserHandlerTests
         Assert.False(result.IsSuccess);
         Assert.Equal("用户已软删除", result.ErrorMessage);
     }
+
+    [Fact]
+    public async Task HandleAsync_OverlongReason_Failure()
+    {
+        // M2 链 b 回归：理由 >255 须命令侧友好拒绝，否则 DB 1406 → 500
+        using var db = CreateInMemoryDbContext();
+        await SeedOwnerAndNormalAsync(db);
+        var handler = new BanUserHandler(db, new InMemoryPermissionSnapshot(), new RecordingTokenRevocation());
+
+        var result = await handler.HandleAsync(new BanUserCommand
+        {
+            TargetUid = 1001,
+            ActorUid = 1,
+            Reason = new string('x', 256)
+        });
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("封禁理由过长（最多 255 字符）", result.ErrorMessage);
+        var target = await db.Users.FirstAsync(u => u.Uid == 1001);
+        Assert.False(target.IsBanned); // 未落库
+    }
 }

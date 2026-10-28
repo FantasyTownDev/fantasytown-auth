@@ -41,6 +41,11 @@ public sealed class BanUserHandler
         if (denial != null)
             return BanUserResult.Failure(denial);
 
+        // M2 链 b：对称 BanPlayerHandler——BannedReason VARCHAR(255)，表单 maxlength
+        // 纯客户端可绕，超长走 DB 1406 会以 500 冒泡
+        if (command.Reason != null && command.Reason.Length > 255)
+            return BanUserResult.Failure("封禁理由过长（最多 255 字符）");
+
         // 全局过滤器：软删账户无封禁意义（哨兵快照已等效封禁）
         var target = await _db.Users.FirstOrDefaultAsync(u => u.Uid == command.TargetUid, cancellationToken);
         if (target == null)
