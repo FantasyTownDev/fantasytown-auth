@@ -1,0 +1,38 @@
+<!-- brand-ignore-file: 本文件为治理说明/模板，内含禁用措辞的教学反例，非生效条款 -->
+<!--
+   FantasyTown-Auth · 交互界面法律通告（AGPLv3 §5(d) / §13）
+   ============================================================
+   规则：本块【只能追加，不得删除、不得伪装成官方】。
+   位置：管理后台页脚 或 /auth/about 端点，必须对所有访问者可见（含未登录）。
+   自部署也必须保留——本项目自己就是“运营者”，更没有豁免理由。
+-->
+
+<div class="ft-legal" style="font-size:.85em;opacity:.8">
+  <p>
+    <strong>FantasyTown Auth</strong>
+    v{{VERSION}} · {{COMMIT_SHORT}} · {{BUILD_DATE}}
+  </p>
+  <p>
+    Copyright &copy; 2026 FantasyTownDev. All rights reserved.<br>
+    Licensed under <a href="./LICENSE">GNU AGPL-3.0-only</a>
+    (no warranty; see license for details).
+  </p>
+  <p>
+    Source (tagged):
+    <a href="https://github.com/FantasyTownDev/fantasytown-auth/tree/v{{VERSION}}">
+      github.com/…/fantasytown-auth/tree/v{{VERSION}}
+    </a>
+    · <a href="./NOTICE.md">Additional notices (§7)</a>
+  </p>
+  <p>
+    <em>Independent project. NOT AN OFFICIAL MINECRAFT PRODUCT.
+    NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.</em><br>
+    <span lang="zh">非 Minecraft 官方产品，未经 Mojang 或 Microsoft 批准，亦不与其关联。
+    运营者：FantasyTownDev · 联系：security@fantasytown.dev（占位，请替换）</span>
+  </p>
+  <p>
+    若为本项目的<strong>修改版</strong>并以网络服务形式提供：请按 AGPLv3 §13 在上述源码链接处
+    提供<strong>你这个修改版的对应源代码</strong>，并在界面显著标明
+    “独立修改版 · 基于 fantasytown-auth（非官方服务）”。
+  </p>
+</div>
