@@ -2,13 +2,17 @@
 
 # FantasyTown.Auth
 
-> **AI 辅助编程声明**：本项目采用 AI 辅助编程开发，涉及 Xiaomi MiMo、Kimi、GLM、DeepSeek 等大语言模型，其中代码主要由 **Xiaomi MiMo** 全权负责生成与优化。
+> NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.
+> 非 Minecraft 官方产品，未经 Mojang 或 Microsoft 批准，亦不与其关联。
+> 运营与责任主体：FantasyTownDev · 联系方式：[GitHub Issue](https://github.com/FantasyTownDev/fantasytown-auth/issues)
 
-Minecraft 第三方验证登录系统最小化内核，基于 .NET 10 构建。
+> **AI 辅助编程声明**：本项目采用 AI 辅助编程开发，涉及 Xiaomi MiMo、Kimi、GLM、DeepSeek 等大语言模型，其中代码主要由 **Xiaomi MiMo** 全权负责生成与优化。详见 [AI_DECLARATION.md](AI_DECLARATION.md)。
+
+兼容 Yggdrasil 协议的独立验证登录内核（适用于 Minecraft 第三方登录场景），基于 .NET 10 构建。
 
 ## 一句话定位
 
-一个最小化的 Minecraft 第三方验证登录系统内核：基于 Yggdrasil 协议实现非 Mojang 官方验证，采用垂直切片模块化单体架构。
+一个最小化的第三方验证登录内核（适用于 Minecraft 第三方登录场景）：基于 Yggdrasil 协议实现非 Mojang 官方验证，采用垂直切片模块化单体架构。
 
 ## 功能特性
 
@@ -306,4 +310,9 @@ FantasyTown.Auth/
 
 ## 许可证
 
-AGPL-3.0 + 非商业使用附加条款。详见 [LICENSE](LICENSE)。
+本项目以 [AGPL-3.0-only](LICENSE) 释出（单一中英混排许可证文件，正式条款以随附英文原文为准）。
+
+- 附加材料条款：[NOTICE.md](NOTICE.md)（AGPLv3 §7：署名保留、修改版标注、源码义务）
+- 商标与命名：[TRADEMARK.md](TRADEMARK.md)（FantasyTown 名号书面申请制；Minecraft/Yggdrasil 品牌边界）
+- 商务合作：[COMMERCIAL.md](COMMERCIAL.md)（独立合同要约，不改变 AGPLv3 授权范围）
+- 版权清单：[COPYRIGHT](COPYRIGHT) · AI 辅助声明：[AI_DECLARATION.md](AI_DECLARATION.md)
