@@ -36,9 +36,17 @@ public class BanModel : AdminPageModel
 
     public async Task<IActionResult> OnPostAsync(int pid, CancellationToken cancellationToken)
     {
+        // M3：解析失败此前静默落 until=null → 管理员意图临时却执行永久封禁
         DateTime? until = null;
-        if (!string.IsNullOrWhiteSpace(Until) && DateTime.TryParse(Until, out var parsed))
+        if (!string.IsNullOrWhiteSpace(Until))
+        {
+            if (!DateTime.TryParse(Until, out var parsed))
+            {
+                TempData["Error"] = "截止时间格式无效，封禁未执行，请检查后重新提交";
+                return RedirectToPage("Detail", new { pid });
+            }
             until = parsed.ToUniversalTime();
+        }
 
         var result = await _handler.HandleAsync(new BanPlayerCommand
         {
