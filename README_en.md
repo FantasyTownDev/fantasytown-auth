@@ -2,8 +2,8 @@
 
 # FantasyTown.Auth
 
-> NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.
-> 非 Minecraft 官方产品，未经 Mojang 或 Microsoft 批准，亦不与其关联。
+> **NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.**
+> **非 Minecraft 官方产品，未经 Mojang 或 Microsoft 批准，亦不与其关联。**
 > Operator & responsible party: FantasyTownDev · Contact: [GitHub Issue](https://github.com/FantasyTownDev/fantasytown-auth/issues)
 
 > **AI-Assisted Development Disclaimer**: This project is developed with the assistance of AI language models including Xiaomi MiMo, Kimi, GLM, and DeepSeek. The code is primarily generated and optimized by **Xiaomi MiMo**. See [AI_DECLARATION.md](AI_DECLARATION.md).
@@ -311,7 +311,7 @@ If Redis has a password configured, set it in `appsettings.json`:
 
 Released under [AGPL-3.0-only](LICENSE) (single bilingual license file; the verbatim English text is canonical).
 
-- Additional terms: [NOTICE.md](NOTICE.md) (AGPLv3 §7: attribution, modified-version identification, source obligation)
+- Additional terms: [NOTICE.md](NOTICE.md) (AGPLv3 §7: **attribution · modified-version identification · source obligation**)
 - Trademark & naming: [TRADEMARK.md](TRADEMARK.md) (written-permission scheme for the FantasyTown name; Minecraft/Yggdrasil brand boundaries)
-- Commercial cooperation: [COMMERCIAL.md](COMMERCIAL.md) (independent contract offer; does not alter AGPLv3 rights)
+- Commercial cooperation: [COMMERCIAL.md](COMMERCIAL.md) (independent contract offer; **does not alter AGPLv3 rights**)
 - Copyright inventory: [COPYRIGHT](COPYRIGHT) · AI declaration: [AI_DECLARATION.md](AI_DECLARATION.md)

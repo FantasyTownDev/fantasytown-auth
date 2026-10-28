@@ -2,8 +2,8 @@
 
 # FantasyTown.Auth
 
-> NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.
-> 非 Minecraft 官方产品，未经 Mojang 或 Microsoft 批准，亦不与其关联。
+> **NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.**
+> **非 Minecraft 官方产品，未经 Mojang 或 Microsoft 批准，亦不与其关联。**
 > 运营与责任主体：FantasyTownDev · 联系方式：[GitHub Issue](https://github.com/FantasyTownDev/fantasytown-auth/issues)
 
 > **AI 辅助编程声明**：本项目采用 AI 辅助编程开发，涉及 Xiaomi MiMo、Kimi、GLM、DeepSeek 等大语言模型，其中代码主要由 **Xiaomi MiMo** 全权负责生成与优化。详见 [AI_DECLARATION.md](AI_DECLARATION.md)。
@@ -312,7 +312,7 @@ FantasyTown.Auth/
 
 本项目以 [AGPL-3.0-only](LICENSE) 释出（单一中英混排许可证文件，正式条款以随附英文原文为准）。
 
-- 附加材料条款：[NOTICE.md](NOTICE.md)（AGPLv3 §7：署名保留、修改版标注、源码义务）
-- 商标与命名：[TRADEMARK.md](TRADEMARK.md)（FantasyTown 名号书面申请制；Minecraft/Yggdrasil 品牌边界）
-- 商务合作：[COMMERCIAL.md](COMMERCIAL.md)（独立合同要约，不改变 AGPLv3 授权范围）
+- 附加材料条款：[NOTICE.md](NOTICE.md)（AGPLv3 §7：**署名保留 · 修改版标注 · 源码义务**）
+- 商标与命名：[TRADEMARK.md](TRADEMARK.md)（FantasyTown 名号**书面申请制**；Minecraft/Yggdrasil 品牌边界）
+- 商务合作：[COMMERCIAL.md](COMMERCIAL.md)（独立合同要约，**不改变 AGPLv3 授权范围**）
 - 版权清单：[COPYRIGHT](COPYRIGHT) · AI 辅助声明：[AI_DECLARATION.md](AI_DECLARATION.md)

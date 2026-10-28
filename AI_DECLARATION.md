@@ -17,9 +17,9 @@ This project is developed with **AI assistance**.
 
 - AI 辅助生成部分**按本项目同一许可证（AGPL-3.0-only）释出**
   （released under the same license as this project）；
-- 相关版权归本项目版权人（FantasyTownDev）持有与主张
+- 相关版权归本项目版权人（FantasyTownDev）**持有与主张**
   （copyright held and asserted by FantasyTownDev）；
-- 不就该等输出向任何第三方主张排他权利
+- **不就该等输出向任何第三方主张排他权利**
   （no exclusive rights are asserted against any third party with respect to such output）。
 
 ---
