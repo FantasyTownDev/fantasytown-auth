@@ -14,17 +14,20 @@ public class LoginModel : PageModel
     private readonly IPasswordService _passwordService;
     private readonly IPermissionSnapshot _permissionSnapshot;
     private readonly IClientIp _clientIp;
+    private readonly ILockoutService _lockoutService;
 
     public LoginModel(
         AuthDbContext db,
         IPasswordService passwordService,
         IPermissionSnapshot permissionSnapshot,
-        IClientIp clientIp)
+        IClientIp clientIp,
+        ILockoutService lockoutService)
     {
         _db = db;
         _passwordService = passwordService;
         _permissionSnapshot = permissionSnapshot;
         _clientIp = clientIp;
+        _lockoutService = lockoutService;
     }
 
     [BindProperty]
@@ -55,7 +58,7 @@ public class LoginModel : PageModel
 
         var clientIp = _clientIp.GetClientIp() ?? "unknown";
 
-        var handler = new LoginHandler(_db, _passwordService, _permissionSnapshot);
+        var handler = new LoginHandler(_db, _passwordService, _permissionSnapshot, _lockoutService);
         var query = new LoginQuery
         {
             Username = Input.Username,

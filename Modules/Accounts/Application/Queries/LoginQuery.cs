@@ -69,11 +69,6 @@ public sealed record LoginResult
     public double? BanRemainingSeconds { get; init; }
 
     /// <summary>
-    /// 锁定剩余时间（秒）
-    /// </summary>
-    public double? LockRemainingSeconds { get; init; }
-
-    /// <summary>
     /// 需要验证码
     /// </summary>
     public bool RequiresCaptcha { get; init; }
@@ -92,19 +87,16 @@ public sealed record LoginResult
         ErrorMessage = error
     };
 
-    public static LoginResult Banned(double remainingSeconds, string? reason = null) => new()
+    /// <summary>
+    /// 登录被拒（含封禁/锁定统一话术场景）。
+    /// message：验密通过后揭示的封禁文案（V5 §6.5/§4.4 评审修订），未传时用兜底句。
+    /// </summary>
+    public static LoginResult Banned(double remainingSeconds, string? message = null) => new()
     {
         IsSuccess = false,
         IsBanned = true,
         BanRemainingSeconds = remainingSeconds,
-        ErrorMessage = reason ?? "账户已被封禁"
-    };
-
-    public static LoginResult Locked(double remainingSeconds) => new()
-    {
-        IsSuccess = false,
-        LockRemainingSeconds = remainingSeconds,
-        ErrorMessage = $"账户已锁定，请 {remainingSeconds:F0} 秒后重试"
+        ErrorMessage = message ?? "账户已被封禁"
     };
 
     public static LoginResult RequiresCaptchaLogin() => new()

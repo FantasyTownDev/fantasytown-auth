@@ -6,6 +6,7 @@ using FantasyTown.Auth.Modules.Accounts.Infrastructure;
 using FantasyTown.Auth.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace FantasyTown.Auth.ContractTests;
@@ -198,12 +199,75 @@ public class YggdrasilContractTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Authenticate_BannedWithCorrectPassword_MatchesGoldenBanReveal()
+    {
+        // V5 §6.5 评审修订：封禁详情仅向密码持有者披露——密码正确才揭示，密码错误落统一
+        // 话术（见上一用例）；永久封禁 + 固定理由使 golden 文案无时间分量，逐字节恒定。
+        // 种子只改 user 行，走 PERM 真实回源路径（cache miss → 读行构建快照）。
+        var client = CreateClient();
+        var account = await SeedAccountAsync();
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
+            var user = await db.Users.FirstAsync(u => u.Email == account.Email);
+            user.IsBanned = true;
+            user.BannedReason = "违规内容测试";
+            user.BannedUntil = null;
+            await db.SaveChangesAsync();
+        }
+
+        var response = await client.PostAsync("/api/yggdrasil/authserver/authenticate", Json(new
+        {
+            username = account.Email,
+            password = account.Password,
+            agent = new { name = "Minecraft", version = 1 },
+        }));
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        await AssertMatchesGoldenAsync(response, "authenticate_banned.json");
+    }
+
+    [Fact]
     public async Task Authenticate_MalformedBody_MatchesGoldenErrorBytes()
     {
         var client = CreateClient();
 
         var response = await client.PostAsync("/api/yggdrasil/authserver/authenticate",
             new StringContent(string.Empty, Encoding.UTF8, "application/json"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await AssertMatchesGoldenAsync(response, "malformed_request.json");
+    }
+
+    [Fact]
+    public async Task Authenticate_NullPasswordField_RejectedAsMalformed()
+    {
+        // H2 回归：required 对显式 null 不拦截（STJ 穿透实证）——若下沉 handler 会
+        // 抛 ArgumentNullException → 非协议 500；端点字段守卫须回 400 malformed。
+        var client = CreateClient();
+
+        var response = await client.PostAsync("/api/yggdrasil/authserver/authenticate", Json(new
+        {
+            username = "victim@example.com",
+            password = (string?)null,
+        }));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await AssertMatchesGoldenAsync(response, "malformed_request.json");
+    }
+
+    [Fact]
+    public async Task Authenticate_NullUsernameField_RejectedAsMalformed()
+    {
+        // 同 H2：username:null 此前会写 FAIL_ACCT: 空后缀键（键空间污染）。
+        var client = CreateClient();
+
+        var response = await client.PostAsync("/api/yggdrasil/authserver/authenticate", Json(new
+        {
+            username = (string?)null,
+            password = "whatever-123",
+        }));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         await AssertMatchesGoldenAsync(response, "malformed_request.json");
@@ -292,6 +356,22 @@ public class YggdrasilContractTests : IAsyncLifetime
         }));
 
         await AssertEmptyWithFixtureStatusAsync(response, "signout_success_204.json");
+    }
+
+    [Fact]
+    public async Task Signout_NullPasswordField_RejectedAsMalformed()
+    {
+        // H2 回归：signout 与 authenticate 同缺口——字段级 null 须 400 malformed 而非 500
+        var client = CreateClient();
+
+        var response = await client.PostAsync("/api/yggdrasil/authserver/signout", Json(new
+        {
+            username = "victim@example.com",
+            password = (string?)null,
+        }));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await AssertMatchesGoldenAsync(response, "malformed_request.json");
     }
 
     [Fact]

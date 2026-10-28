@@ -10,22 +10,25 @@ namespace FantasyTown.Auth.Modules.Accounts.Application.Commands;
 /// 事务内条件更新闸门（与 IsBanEffective 同构，V5 N3）——0 行 = 目标已处封禁生效期 → 409；
 /// 成功则同事务归位旧 active 记录并插入新 player_bans（每玩家至多一条 active，V4 R2）。
 /// 副作用（H5）：DEL PLAYER:{uuid} + 吊销属主全部令牌——一用户一角色，属主令牌
-/// selectedProfile 即该玩家，全吊销即设计所称「吊销选中令牌」。
+/// selectedProfile 即该玩家，全吊销即设计所称「吊销选中令牌」+ BAN_SIGNAL 广播。
 /// </summary>
 public sealed class BanPlayerHandler
 {
     private readonly AuthDbContext _db;
     private readonly IPlayerCacheInvalidation _playerCacheInvalidation;
     private readonly ITokenRevocation _tokenRevocation;
+    private readonly IBanSignalPublisher _banSignal;
 
     public BanPlayerHandler(
         AuthDbContext db,
         IPlayerCacheInvalidation playerCacheInvalidation,
-        ITokenRevocation tokenRevocation)
+        ITokenRevocation tokenRevocation,
+        IBanSignalPublisher? banSignal = null)
     {
         _db = db;
         _playerCacheInvalidation = playerCacheInvalidation;
         _tokenRevocation = tokenRevocation;
+        _banSignal = banSignal ?? NoopBanSignalPublisher.Instance;
     }
 
     public async Task<BanPlayerResult> HandleAsync(
@@ -38,7 +41,8 @@ public sealed class BanPlayerHandler
         if (gate.Denial != null)
             return BanPlayerResult.Failure(gate.Denial);
 
-        if (command.Reason.Length > 255)
+        // L2：命令可被 null! 直构（调用方现以 ?? "" 兜底，防御性加固）
+        if ((command.Reason?.Length ?? 0) > 255)
             return BanPlayerResult.Failure("封禁理由过长（最多 255 字符）");
 
         var nowUtc = DateTime.UtcNow;
@@ -98,6 +102,22 @@ public sealed class BanPlayerHandler
         // 再经 Shared 接口吊销属主全部令牌。失败不吞——Redis 故障必须可见，静默跳过即破坏封禁即时性。
         await _playerCacheInvalidation.InvalidatePlayerAsync(gate.Player!.Uuid, cancellationToken);
         await _tokenRevocation.RevokeAllAsync(gate.Owner!.Email, cancellationToken);
+
+        // BAN_SIGNAL 广播（uuid/reason/until 供未来 Java Agent / 插件消费）；失败不吞
+        await _banSignal.PublishAsync(new BanSignal
+        {
+            Action = "ban",
+            Scope = "player",
+            Pid = command.Pid,
+            Uid = gate.Owner!.Uid,
+            Uuid = gate.Player!.Uuid,
+            PlayerName = gate.Player.Name,
+            Email = gate.Owner.Email,
+            Reason = command.Reason,
+            Until = command.Until,
+            OperatorUid = command.ActorUid,
+            At = DateTime.UtcNow
+        }, cancellationToken);
 
         return BanPlayerResult.Success();
     }

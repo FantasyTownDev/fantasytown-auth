@@ -174,6 +174,29 @@ public class RegisterUserHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_OverlongEmail_ReturnsFailure()
+    {
+        // M2 回归：email > 100（users.email 列限）须前置拒绝，
+        // 否则注册链 DbUpdateException 1406 直接冒泡 → 500
+        using var db = CreateInMemoryDbContext();
+        var handler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService(), new SiteOptions(), new InlineOwnerClaimLock());
+
+        var overlongEmail = $"u{new string('a', 95)}@example.com"; // 109 字符 > 100
+        var command = new RegisterUserCommand
+        {
+            Username = "valid_user",
+            Password = "Password123!",
+            Email = overlongEmail,
+            ClientIp = "127.0.0.1"
+        };
+
+        var result = await handler.HandleAsync(command);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("邮箱格式无效", result.ErrorMessage);
+    }
+
+    [Fact]
     public async Task HandleAsync_NullEmail_Succeeds()
     {
         using var db = CreateInMemoryDbContext();

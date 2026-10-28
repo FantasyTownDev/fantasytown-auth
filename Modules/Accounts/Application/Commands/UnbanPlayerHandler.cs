@@ -9,17 +9,23 @@ namespace FantasyTown.Auth.Modules.Accounts.Application.Commands;
 /// 玩家解封处理器（V5 §5.3 与封禁对称）：
 /// 条件更新 players.is_banned: true→false + 同事务翻转唯一 active 记录；
 /// 0 行 = 目标本就未处于封禁 → 幂等成功（防错 #7）。
-/// 副作用（H5）：DEL PLAYER:{uuid}——解封即时反映到 join/hasJoined 封禁闸门。
+/// 副作用（H5）：DEL PLAYER:{uuid}——解封即时反映到 join/hasJoined 封禁闸门；
+/// 实际解封（affected>0）时广播 BAN_SIGNAL，幂等 0 行不广播。
 /// </summary>
 public sealed class UnbanPlayerHandler
 {
     private readonly AuthDbContext _db;
     private readonly IPlayerCacheInvalidation _playerCacheInvalidation;
+    private readonly IBanSignalPublisher _banSignal;
 
-    public UnbanPlayerHandler(AuthDbContext db, IPlayerCacheInvalidation playerCacheInvalidation)
+    public UnbanPlayerHandler(
+        AuthDbContext db,
+        IPlayerCacheInvalidation playerCacheInvalidation,
+        IBanSignalPublisher? banSignal = null)
     {
         _db = db;
         _playerCacheInvalidation = playerCacheInvalidation;
+        _banSignal = banSignal ?? NoopBanSignalPublisher.Instance;
     }
 
     public async Task<UnbanPlayerResult> HandleAsync(
@@ -64,6 +70,23 @@ public sealed class UnbanPlayerHandler
 
         // 副作用（H5）：失效 PLAYER:{uuid}，解封即时反映到 join/hasJoined 封禁闸门
         await _playerCacheInvalidation.InvalidatePlayerAsync(gate.Player!.Uuid, cancellationToken);
+
+        // BAN_SIGNAL 广播：仅实际解封（affected>0）——幂等 0 行无状态变化不发；失败不吞
+        if (affected > 0)
+        {
+            await _banSignal.PublishAsync(new BanSignal
+            {
+                Action = "unban",
+                Scope = "player",
+                Pid = command.Pid,
+                Uid = gate.Owner!.Uid,
+                Uuid = gate.Player!.Uuid,
+                PlayerName = gate.Player.Name,
+                Email = gate.Owner.Email,
+                OperatorUid = command.ActorUid,
+                At = DateTime.UtcNow
+            }, cancellationToken);
+        }
 
         return UnbanPlayerResult.Success(affected > 0, priorBanCount);
     }

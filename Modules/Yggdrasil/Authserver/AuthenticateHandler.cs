@@ -7,8 +7,10 @@ namespace FantasyTown.Auth.Modules.Yggdrasil.Authserver;
 
 /// <summary>
 /// Yggdrasil authenticate 处理器
-/// 流程：封禁前置免验密 → LOCKOUT → 验密 → 原子签发 Token
+/// 流程：封禁前置判定（暂存）→ LOCKOUT → 验密 → 封禁/哨兵揭示 → 原子签发 Token
 /// 数据访问经 IPlayerDirectory（H5 模块纪律边界）；封禁/权限判定经 PERM 快照。
+/// V5 §6.5 评审修订：封禁详情仅向密码持有者披露——密码错误沿用统一话术，
+/// 封禁账户与正常账户的凭据错误面同文案同计时（防枚举），详见 HandleCoreAsync 内注释。
 /// </summary>
 public sealed class AuthenticateHandler
 {
@@ -71,12 +73,14 @@ public sealed class AuthenticateHandler
             return AuthenticateResult.Forbidden("Invalid credentials. Invalid username or password.");
         }
 
-        // 3. 封禁前置检查 (M9) — 不验密，节省 CPU；null 快照按封禁等效哨兵拒绝（C3 / V5 N2）
+        // 3. 封禁前置判定（防错 #17：先 PERM 判定再验密；M9 回源与用户查询合并一次 DB 读）——
+        //    判定结果暂存、不立即拒绝：验密通过后才揭示封禁详情（V5 §6.5 评审修订），
+        //    密码错误沿用统一话术，封禁与正常账户的凭据错误面同文案同时序（防枚举，§8）。
+        //    null 快照按封禁等效哨兵拒绝（C3 / V5 N2）。
         var snapshot = await _permissionSnapshot.GetAsync(account.Uid, cancellationToken);
-        if (snapshot == null || BanRules.IsBanEffective(snapshot.IsBanned, snapshot.BannedUntil, DateTime.UtcNow))
-        {
-            return AuthenticateResult.Forbidden("Invalid credentials. Invalid username or password.");
-        }
+        var banEffective = snapshot != null
+            && BanRules.IsBanEffective(snapshot.IsBanned, snapshot.BannedUntil, DateTime.UtcNow);
+        var missingSnapshot = snapshot == null;
 
         // 4. LOCKOUT 检查（LOCKOUT:{uid}，Web 与 Ygg authenticate 共享键空间）
         if (await _lockoutService.IsLockedOutAsync(account.Uid, cancellationToken))
@@ -97,6 +101,19 @@ public sealed class AuthenticateHandler
 
         // 6. 密码正确，清除 LOCKOUT:{uid} 与 FAIL_EP:{email}:{ip}
         await _lockoutService.ResetAsync(account.Uid, account.Email, clientIp, cancellationToken);
+
+        // 6.5 封禁/哨兵揭示（仅向密码持有者披露；过期封禁 IsBanEffective=false 已落入正常登录）：
+        //     until 取判定同源的 PERM 快照，reason 取 account 行（同查询附带，零额外 DB 读）；
+        //     PERM null 哨兵不伪造封禁理由，给可联系管理员的状态异常文案。
+        if (missingSnapshot)
+        {
+            return AuthenticateResult.Forbidden("账号状态异常，请联系管理员");
+        }
+        if (banEffective)
+        {
+            return AuthenticateResult.Forbidden(
+                BanRules.RevealMessage(snapshot!.BannedUntil, account.BannedReason));
+        }
 
         // 7. 解析玩家（当前冻结 schema：一用户一角色，取首个；多角色为后续演进）
         var players = (await _directory.GetProfilesByUserAsync(account.Uid, cancellationToken)).ToList();

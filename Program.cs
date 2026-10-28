@@ -99,6 +99,8 @@ builder.Services.AddScoped<IPasswordService, Argon2PasswordService>();
 // 时钟抽象（策略谓词与封禁时间谓词取当前 UTC，支持确定性测试）
 builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.AddScoped<IPermissionSnapshot, RedisPermissionSnapshot>();
+// BAN_SIGNAL 封禁信号量（V5 评审）：封禁/解封 pub/sub 广播，供未来 Java Agent / 插件消费
+builder.Services.AddScoped<IBanSignalPublisher, RedisBanSignalPublisher>();
 // H5：Yggdrasil 经 IPlayerDirectory 访问账号数据（模块纪律边界）
 builder.Services.AddScoped<IPlayerDirectory, PlayerDirectory>();
 builder.Services.AddScoped<ILockoutService>(sp => new RedisLockoutService(
@@ -312,6 +314,10 @@ if (!app.Environment.IsDevelopment())
     app.UseExceptionHandler("/Error");
     app.UseHsts();
 }
+
+// M1：Yggdrasil 协议路径异常守卫——必须在 UseExceptionHandler 之后（内层），
+// /api/yggdrasil/* 的未预期异常在此转 500 协议 JSON，不冒泡到全局 HTML 兜底
+app.UseMiddleware<YggProtocolExceptionHandler>();
 
 // T3-008：纹理端点经独立管道分支绕过 HTTPS 重定向——Minecraft 客户端不跟随 307，
 // 生产开启重定向后 /textures/* 拉取必须仍可直达（原"先注册 Map 即可"的注释为误解，

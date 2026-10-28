@@ -139,6 +139,32 @@ public class UnbanPlayerIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Unban_BannedPlayer_PublishesBanSignalOnlyOnce()
+    {
+        // BAN_SIGNAL：实际解封才广播一次；幂等 0 行（无状态变化）不发
+        using var db = CreateContext();
+        var rid = Guid.NewGuid().ToString("N")[..8];
+        var (ownerUid, pid) = SeedBannedPlayer(db, rid, "uns");
+        var admin = SeedOwnerAdmin(db, rid);
+        var publisher = new RecordingBanSignalPublisher();
+
+        var handler = new UnbanPlayerHandler(db, new RecordingPlayerCacheInvalidation(), publisher);
+        var result = await handler.HandleAsync(new UnbanPlayerCommand { ActorUid = admin.Uid, Pid = pid });
+        var second = await handler.HandleAsync(new UnbanPlayerCommand { ActorUid = admin.Uid, Pid = pid });
+
+        Assert.True(result.IsSuccess, result.ErrorMessage);
+        Assert.True(result.WasBanned);
+        Assert.False(second.WasBanned);
+        var signal = Assert.Single(publisher.Published);
+        Assert.Equal("unban", signal.Action);
+        Assert.Equal("player", signal.Scope);
+        Assert.Equal(pid, signal.Pid);
+        Assert.Equal(ownerUid, signal.Uid);
+        Assert.Equal(admin.Uid, signal.OperatorUid);
+        Assert.False(string.IsNullOrEmpty(signal.Uuid));
+    }
+
+    [Fact]
     public async Task Unban_NotBannedPlayer_IsIdempotentSuccess()
     {
         // 防错 #7：0 行按幂等成功处理（WasBanned=false 供 TempData 提示）

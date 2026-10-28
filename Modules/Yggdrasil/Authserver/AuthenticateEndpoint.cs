@@ -50,6 +50,16 @@ public static class AuthenticateEndpoint
                 return;
             }
 
+            // 2.5 字段级 null 守卫（对齐 join：required 对显式 null 不拦截，
+            //     穿透到 Argon2.Verify 会抛 ArgumentNullException → 非协议 500；
+            //     且 username:null 会先写 FAIL_ACCT: 空后缀键污染键空间）
+            if (request.Username == null || request.Password == null)
+            {
+                context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                await context.Response.WriteAsJsonAsync(YggErrorResponse.MalformedRequest());
+                return;
+            }
+
             // 3. 获取客户端 IP（受信代理解析，见 V5 §8）
             var clientIp = context.RequestServices.GetRequiredService<IClientIp>().GetClientIp() ?? "unknown";
 

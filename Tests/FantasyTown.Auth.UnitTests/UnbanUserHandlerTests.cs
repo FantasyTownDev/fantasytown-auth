@@ -80,6 +80,28 @@ public class UnbanUserHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_Unban_PublishesSignalOnlyWhenWasBanned()
+    {
+        // BAN_SIGNAL：实际解封才广播；幂等 0 行（无状态变化）不发
+        using var db = CreateInMemoryDbContext();
+        await SeedOwnerAndBannedNormalAsync(db);
+        var publisher = new RecordingBanSignalPublisher();
+        var handler = new UnbanUserHandler(db, new InMemoryPermissionSnapshot(), publisher);
+
+        var first = await handler.HandleAsync(new UnbanUserCommand { TargetUid = 1001, ActorUid = 1 });
+        var second = await handler.HandleAsync(new UnbanUserCommand { TargetUid = 1001, ActorUid = 1 });
+
+        Assert.True(first.WasBanned);
+        Assert.False(second.WasBanned);
+        var signal = Assert.Single(publisher.Published);
+        Assert.Equal("unban", signal.Action);
+        Assert.Equal("user", signal.Scope);
+        Assert.Equal(1001, signal.Uid);
+        Assert.Equal("user@test.com", signal.Email);
+        Assert.Equal(1, signal.OperatorUid);
+    }
+
+    [Fact]
     public async Task HandleAsync_ModeratorActor_Denied()
     {
         using var db = CreateInMemoryDbContext();

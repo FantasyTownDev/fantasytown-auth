@@ -133,8 +133,9 @@ fix/db-concurrent-registration
 
 ### 提交规范
 
-- 分支内使用约定式提交（见上方 Conventional Commits 规范）
-- 合并提交使用 squash merge，保留干净的提交历史
+- 分支内使用约定式提交（见上方 Conventional Commits 规范），并遵守上方颗粒度要求（行级 > 文件级 > 功能块级）
+- 合并回 develop/main 使用 **merge commit**（`Merge pull request #N from ...`），保留分支内颗粒度提交历史；禁止 squash merge——其会抹掉颗粒度提交，与本节颗粒度要求矛盾（规则于 PR-11~14 实践评审后修订）
+- merge commit 的 body 须撰写（参考 PR #14 格式）：分节汇总本 PR 变更 + 验证数据 + `Source: 分支 → 目标分支` + 依赖/顺序说明
 
 ## Architecture
 

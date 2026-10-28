@@ -43,4 +43,16 @@ public static class BanRules
         var remaining = (bannedUntil.Value - nowUtc).TotalSeconds;
         return remaining > 0 ? remaining : 0;
     }
+
+    /// <summary>
+    /// 封禁揭示文案（V5 §6.5/§4.4 评审修订：验密通过后向账号持有者披露封禁状态与原因）。
+    /// 仅由调用方在密码校验通过后使用；期限展示与管理端 Detail 页格式一致（yyyy-MM-dd HH:mm:ss）。
+    /// </summary>
+    public static string RevealMessage(DateTime? bannedUntil, string? reason)
+    {
+        var term = bannedUntil.HasValue ? $"截止 {bannedUntil.Value:yyyy-MM-dd HH:mm:ss}" : "永久";
+        return string.IsNullOrEmpty(reason)
+            ? $"账号已被封禁（{term}）"
+            : $"账号已被封禁：{reason}（{term}）";
+    }
 }

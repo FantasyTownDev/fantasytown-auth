@@ -167,6 +167,50 @@ public class BanUserHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_BanUser_PublishesBanSignal()
+    {
+        // BAN_SIGNAL 广播接线：结构化字段供未来 Java Agent / 插件解析
+        using var db = CreateInMemoryDbContext();
+        await SeedOwnerAndNormalAsync(db);
+        var publisher = new RecordingBanSignalPublisher();
+        var handler = new BanUserHandler(db, new InMemoryPermissionSnapshot(), new RecordingTokenRevocation(), publisher);
+        var until = DateTime.UtcNow.AddHours(2);
+
+        var result = await handler.HandleAsync(new BanUserCommand
+        {
+            TargetUid = 1001,
+            ActorUid = 1,
+            Reason = "spam",
+            Until = until
+        });
+
+        Assert.True(result.IsSuccess);
+        var signal = Assert.Single(publisher.Published);
+        Assert.Equal("ban", signal.Action);
+        Assert.Equal("user", signal.Scope);
+        Assert.Equal(1001, signal.Uid);
+        Assert.Equal("user@test.com", signal.Email);
+        Assert.Equal("spam", signal.Reason);
+        Assert.Equal(until, signal.Until);
+        Assert.Equal(1, signal.OperatorUid);
+    }
+
+    [Fact]
+    public async Task HandleAsync_BanUserDenied_PublishesNothing()
+    {
+        // 授权拒绝路径不产生状态变化 → 不广播
+        using var db = CreateInMemoryDbContext();
+        await SeedOwnerAndNormalAsync(db);
+        var publisher = new RecordingBanSignalPublisher();
+        var handler = new BanUserHandler(db, new InMemoryPermissionSnapshot(), new RecordingTokenRevocation(), publisher);
+
+        var result = await handler.HandleAsync(new BanUserCommand { TargetUid = 1001, ActorUid = 1001 });
+
+        Assert.False(result.IsSuccess);
+        Assert.Empty(publisher.Published);
+    }
+
+    [Fact]
     public async Task HandleAsync_SoftDeletedTarget_Failure()
     {
         using var db = CreateInMemoryDbContext();
@@ -180,5 +224,49 @@ public class BanUserHandlerTests
 
         Assert.False(result.IsSuccess);
         Assert.Equal("用户已软删除", result.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task HandleAsync_OverlongReason_Failure()
+    {
+        // M2 链 b 回归：理由 >255 须命令侧友好拒绝，否则 DB 1406 → 500
+        using var db = CreateInMemoryDbContext();
+        await SeedOwnerAndNormalAsync(db);
+        var handler = new BanUserHandler(db, new InMemoryPermissionSnapshot(), new RecordingTokenRevocation());
+
+        var result = await handler.HandleAsync(new BanUserCommand
+        {
+            TargetUid = 1001,
+            ActorUid = 1,
+            Reason = new string('x', 256)
+        });
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("封禁理由过长（最多 255 字符）", result.ErrorMessage);
+        var target = await db.Users.FirstAsync(u => u.Uid == 1001);
+        Assert.False(target.IsBanned); // 未落库
+    }
+
+    [Fact]
+    public async Task HandleAsync_PastUntil_Failure()
+    {
+        // M4 回归：过期截止时间若直写 → IsBanned=true 且 IsBanEffective=false
+        // （管理页显示已封禁、实际可登录）——须与 BanPlayerHandler 同样拒绝
+        using var db = CreateInMemoryDbContext();
+        await SeedOwnerAndNormalAsync(db);
+        var handler = new BanUserHandler(db, new InMemoryPermissionSnapshot(), new RecordingTokenRevocation());
+
+        var result = await handler.HandleAsync(new BanUserCommand
+        {
+            TargetUid = 1001,
+            ActorUid = 1,
+            Reason = "expired",
+            Until = DateTime.UtcNow.AddMinutes(-1)
+        });
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("封禁截止时间必须晚于当前时间", result.ErrorMessage);
+        var target = await db.Users.FirstAsync(u => u.Uid == 1001);
+        Assert.False(target.IsBanned); // 未落库
     }
 }

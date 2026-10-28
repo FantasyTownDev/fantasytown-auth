@@ -1,5 +1,6 @@
 using FantasyTown.Auth.Modules.Accounts.Domain;
 using FantasyTown.Auth.Modules.Accounts.Infrastructure;
+using FantasyTown.Auth.Modules.Shared;
 using FantasyTown.Auth.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -7,18 +8,23 @@ namespace FantasyTown.Auth.Modules.Accounts.Application.Commands;
 
 /// <summary>
 /// 账户解封处理器（V5 §7.3）
-/// 副作用：解除 is_banned（清 until/reason）+ DEL PERM 快照 + 审计 unban。
-/// 本就未封禁按幂等成功处理（WasBanned=false，不落审计，对齐 §7.3 unban 幂等声明）。
+/// 副作用：解除 is_banned（清 until/reason）+ DEL PERM 快照 + 审计 unban + BAN_SIGNAL 广播。
+/// 本就未封禁按幂等成功处理（WasBanned=false，不落审计、不广播，对齐 §7.3 unban 幂等声明）。
 /// </summary>
 public sealed class UnbanUserHandler
 {
     private readonly AuthDbContext _db;
     private readonly IPermissionSnapshot _permissionSnapshot;
+    private readonly IBanSignalPublisher _banSignal;
 
-    public UnbanUserHandler(AuthDbContext db, IPermissionSnapshot permissionSnapshot)
+    public UnbanUserHandler(
+        AuthDbContext db,
+        IPermissionSnapshot permissionSnapshot,
+        IBanSignalPublisher? banSignal = null)
     {
         _db = db;
         _permissionSnapshot = permissionSnapshot;
+        _banSignal = banSignal ?? NoopBanSignalPublisher.Instance;
     }
 
     public async Task<UnbanUserResult> HandleAsync(
@@ -54,6 +60,17 @@ public sealed class UnbanUserHandler
             CreatedAt = DateTime.UtcNow
         });
         await _db.SaveChangesAsync(cancellationToken);
+
+        // BAN_SIGNAL 广播（仅实际解封路径；幂等 0 行在上方提前返回不发）；失败不吞
+        await _banSignal.PublishAsync(new BanSignal
+        {
+            Action = "unban",
+            Scope = "user",
+            Uid = command.TargetUid,
+            Email = target.Email,
+            OperatorUid = command.ActorUid,
+            At = DateTime.UtcNow
+        }, cancellationToken);
 
         return UnbanUserResult.Success(wasBanned: true);
     }

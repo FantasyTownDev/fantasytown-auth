@@ -60,22 +60,15 @@ public sealed class LoginHandler
             return LoginResult.Failure("用户名或密码错误");
         }
 
-        // 3. 检查是否被封禁（时间谓词）
+        // 3. 封禁判定暂存（防错 #17：判定前置；V5 §6.5/§4.4 评审修订——验密通过后才揭示，
+        //    密码错误与正常账户同文案同计时，防枚举）
         var banEffective = BanRules.IsBanEffective(user.IsBanned, user.BannedUntil, nowUtc);
-        if (banEffective)
-        {
-            var remainingSeconds = user.BannedUntil.HasValue
-                ? BanRules.GetBanRemainingSeconds(user.BannedUntil, nowUtc) ?? 0
-                : -1; // -1 = 永久封禁
 
-            return LoginResult.Banned(remainingSeconds, user.BannedReason);
-        }
-
-        // 4. LOCKOUT 检查（LOCKOUT:{uid}，Web 与 Ygg authenticate 共享键空间）
+        // 4. LOCKOUT 检查（LOCKOUT:{uid}，Web 与 Ygg authenticate 共享键空间）——
+        //    前置拒绝省 CPU；§8：锁定状态不外显，与凭据错误同文案
         if (await _lockoutService.IsLockedOutAsync(user.Uid, cancellationToken))
         {
-            var remaining = await _lockoutService.GetRemainingLockoutSecondsAsync(user.Uid, cancellationToken);
-            return LoginResult.Locked(remaining ?? 0);
+            return LoginResult.Failure("用户名或密码错误");
         }
 
         // 5. 验证密码
@@ -91,6 +84,17 @@ public sealed class LoginHandler
 
         // 6. 密码正确，清除 LOCKOUT:{uid} 与 FAIL_EP:{email}:{ip}
         await _lockoutService.ResetAsync(user.Uid, user.Email, query.ClientIp, cancellationToken);
+
+        // 6.5 封禁揭示（仅向密码持有者披露；须在 7 之前——被封账户不得覆盖 PERM 快照；
+        //     过期封禁 banEffective=false 已落入正常登录并在 8 清除字段）
+        if (banEffective)
+        {
+            var remainingSeconds = user.BannedUntil.HasValue
+                ? BanRules.GetBanRemainingSeconds(user.BannedUntil, nowUtc) ?? 0
+                : -1; // -1 = 永久封禁
+
+            return LoginResult.Banned(remainingSeconds, BanRules.RevealMessage(user.BannedUntil, user.BannedReason));
+        }
 
         // 7. 更新权限快照
         await _permissionSnapshot.SetAsync(user.Uid, new PermissionSnapshot
