@@ -46,6 +46,13 @@ public sealed class BanUserHandler
         if (command.Reason != null && command.Reason.Length > 255)
             return BanUserResult.Failure("封禁理由过长（最多 255 字符）");
 
+        // M4：对称 BanPlayerHandler——过去/当前的 Until 若直写会得到
+        // IsBanned=true 且 IsBanEffective=false（管理页显示已封禁、实际可登录，
+        // 冻结项 6 状态机歧义）
+        var nowUtc = DateTime.UtcNow;
+        if (command.Until.HasValue && command.Until.Value <= nowUtc)
+            return BanUserResult.Failure("封禁截止时间必须晚于当前时间");
+
         // 全局过滤器：软删账户无封禁意义（哨兵快照已等效封禁）
         var target = await _db.Users.FirstOrDefaultAsync(u => u.Uid == command.TargetUid, cancellationToken);
         if (target == null)

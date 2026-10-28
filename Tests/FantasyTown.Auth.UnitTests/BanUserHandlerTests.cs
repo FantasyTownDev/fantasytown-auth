@@ -246,4 +246,27 @@ public class BanUserHandlerTests
         var target = await db.Users.FirstAsync(u => u.Uid == 1001);
         Assert.False(target.IsBanned); // 未落库
     }
+
+    [Fact]
+    public async Task HandleAsync_PastUntil_Failure()
+    {
+        // M4 回归：过期截止时间若直写 → IsBanned=true 且 IsBanEffective=false
+        // （管理页显示已封禁、实际可登录）——须与 BanPlayerHandler 同样拒绝
+        using var db = CreateInMemoryDbContext();
+        await SeedOwnerAndNormalAsync(db);
+        var handler = new BanUserHandler(db, new InMemoryPermissionSnapshot(), new RecordingTokenRevocation());
+
+        var result = await handler.HandleAsync(new BanUserCommand
+        {
+            TargetUid = 1001,
+            ActorUid = 1,
+            Reason = "expired",
+            Until = DateTime.UtcNow.AddMinutes(-1)
+        });
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("封禁截止时间必须晚于当前时间", result.ErrorMessage);
+        var target = await db.Users.FirstAsync(u => u.Uid == 1001);
+        Assert.False(target.IsBanned); // 未落库
+    }
 }
