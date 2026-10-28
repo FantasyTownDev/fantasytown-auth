@@ -41,7 +41,8 @@ public sealed class BanPlayerHandler
         if (gate.Denial != null)
             return BanPlayerResult.Failure(gate.Denial);
 
-        if (command.Reason.Length > 255)
+        // L2：命令可被 null! 直构（调用方现以 ?? "" 兜底，防御性加固）
+        if ((command.Reason?.Length ?? 0) > 255)
             return BanPlayerResult.Failure("封禁理由过长（最多 255 字符）");
 
         var nowUtc = DateTime.UtcNow;
