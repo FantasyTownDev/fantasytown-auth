@@ -22,6 +22,8 @@ A minimal standalone verification-login kernel (for Minecraft third-party login 
 - **Web Account System**: Email registration + unique Minecraft player name binding
 - **Four-Tier Permission Model**: NormalPlayer(0) > ServerModerator(1) > ServerOwner(2) > PlatformAdmin(3)
 - **Two-Level Bans**: Account-level (affects login) + Player-level (bans individual player name)
+- **Admin Console (/admin)**: management pipeline (Antiforgery > authorization policy > privilege matrix > double-confirm > domain command) with immediate effect (PERM snapshot invalidation / token revocation)
+- **Ban Event Broadcasting**: BAN_SIGNAL Redis pub/sub (for future Agent / plugin consumption); ban details revealed only to password holders (enumeration-proof)
 - **High-Concurrency Design**: Zero DB access on hot paths, single instance steady-state 5000 RPS
 - **Security Design**: User enumeration prevention, atomic token issuance, single-use tickets
 - **Extensible Architecture**: Modular design for easy feature extension
@@ -143,6 +145,7 @@ FantasyTown.Auth/
 ├── Program.cs                      # Startup config, DI, middleware pipeline
 ├── Modules/
 │   ├── Accounts/                   # Account module
+│   │   ├── Admin/                  # Management gates: ManagementGuard / ManagementGate filter
 │   │   ├── Application/            # Application layer: command/query handlers
 │   │   ├── Domain/                 # Domain layer: entities/value objects/rules
 │   │   └── Infrastructure/         # Infrastructure: password service/permission snapshot/lockout
@@ -153,8 +156,10 @@ FantasyTown.Auth/
 │   └── Shared/                     # Shared: Result, IClock, IClientIp, IAuditChannel
 ├── Persistence/                    # EF Core DbContext
 ├── Migrations/                     # EF Core initial migration (6-table InitialCreate)
-├── Middleware/                     # RejectBannedUser middleware
-└── Pages/                          # Razor Pages: login/register/forgot-password/reset-password
+├── Middleware/                     # Ban interception / cookie auth / protocol JSON error fallback
+├── Pages/                          # Razor Pages: account flows + /admin console
+├── Tests/                          # Unit / integration (MariaDB+Redis) / contract (golden fixtures)
+└── legal/                          # License governance suite (GOVERNANCE + scripts + templates)
 ```
 
 ## API Endpoints
@@ -207,17 +212,18 @@ If Redis has a password configured, set it in `appsettings.json`:
 ## Security Features
 
 - User enumeration prevention (uniform response + timing equalization)
+- Ban-detail enumeration-proofing (reason and deadline revealed only after successful password verification)
 - Atomic token issuance (Redis Lua scripts)
 - Tiered rate limiting (IP fixed window + account x IP sliding window)
 - Registration IP quota (default 3 accounts per IP; requests over quota are rejected)
-- Failed-login lockout with exponential backoff (15 / 30 / 60 minutes)
+- Failed-login lockout with exponential backoff (15 / 30 / 60 minutes; LOCKOUT keyspace shared between Web and Ygg)
 - Immediate banned-user interception (PERM snapshot + RejectBannedUser middleware)
+- Frozen protocol error format (/api/yggdrasil unhandled exceptions fall back to JSON 500)
 - RSA-SHA1 texture signing (authlib-injector compatible)
 
 ## Known Limitations
 
 - **Email channel in development**: the password-reset token pipeline is ready, but mail delivery is not yet wired up — submitting the forgot-password form currently sends no email. For an urgent reset, update the password hash in the database directly (Argon2 PHC format). Mail delivery is on the roadmap
-- **Admin UI in development**: `/admin` pages ship with the P4 milestone; currently bans and permission changes require direct database operations
 
 ## Roadmap
 
@@ -279,19 +285,26 @@ If Redis has a password configured, set it in `appsettings.json`:
 - [x] Atomic concurrent saves (registration race committed in a single SaveChanges)
 - [x] Linux x64 production verification (MariaDB unix socket + Redis)
 
-### P4: Admin Domain (In Progress)
+### P4: Admin Domain ✅
 
 - [x] ManagementGuard three functions (CanManage / NotSelf / CanClearLockout)
-- [ ] /admin authorization policies (moderator / owner / admin)
-- [ ] /admin area global no-cache middleware
-- [ ] Management pipeline (Antiforgery > Policy > Privilege Matrix > Double-Confirm > Domain Command > Side Effects > Audit > PRG)
-- [ ] Sensitive operation double-confirm (permission-change / force-reset-password / delete require actor password)
-- [ ] /admin player management pages (list / detail / ban / unban / reset-texture / rename)
-- [ ] /admin user management pages (list / detail / ban / unban / permission / force-reset-password / email / soft-delete)
-- [ ] /admin moderator management pages (list)
-- [ ] /admin lockout management pages (clear lockout)
+- [x] /admin authorization policies (moderator / owner / admin)
+- [x] /admin area global no-cache middleware
+- [x] Management pipeline (Antiforgery > Policy > Privilege Matrix > Double-Confirm > Domain Command > Side Effects > Audit > PRG)
+- [x] Sensitive operation double-confirm (permission-change / force-reset-password / delete require actor password)
+- [x] Seed email: first registrant auto-promoted to ServerOwner
+- [x] /admin player management pages (list / detail / ban / unban / reset-texture / rename)
+- [x] /admin user management pages (list / detail / ban / unban / permission / force-reset-password / email / soft-delete)
+- [x] /admin moderator management pages (list)
+- [x] /admin lockout management pages (clear lockout)
 - [x] ManagementGuard unit tests (CanManage full combinations + CanClearLockout self-pass anchor)
-- [ ] Admin domain regression tests (privilege matrix full coverage + double-confirm + audit persistence)
+- [x] Admin domain regression tests (privilege matrix 80-case + immediacy 3-scenario + antiforgery pipeline pinned over HTTP)
+
+### Follow-up Review Revisions (Ban Chain + Robustness) ✅
+
+- [x] Ban details revealed only after password verification (enumeration-proof: uniform wording on wrong password)
+- [x] BAN_SIGNAL Redis pub/sub broadcasting (ban/unban events for future Agent / plugin consumption)
+- [x] Pre-P5 robustness audit fixes (web login lockout wiring / field-level null guards / protocol JSON error fallback / input length caps / ban-page Until validation)
 
 ### P5: Hardening & Stress Test (Pending)
 

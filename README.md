@@ -22,6 +22,8 @@
 - **Web 账户系统**：邮箱注册 + 唯一 Minecraft 角色名绑定
 - **四级权限体系**：普通玩家(0) → 协管(1) → 服主(2) → 平台管理员(3)
 - **两级封禁**：账户级（影响登录）+ 玩家级（禁单个角色名）
+- **管理后台（/admin）**：管理管线（Antiforgery → 授权策略 → 越权矩阵 → 二次确认 → 领域命令）+ 操作即时生效（PERM 快照失效 / 令牌吊销）
+- **封禁事件广播**：BAN_SIGNAL Redis pub/sub（供 Agent / 插件消费）；封禁详情仅向密码持有者披露（防枚举）
 - **高并发设计**：热路径零 DB 访问，单实例稳态 5000 RPS
 - **安全设计**：免用户枚举、令牌原子、票据一次性
 - **可扩展架构**：模块化设计，便于后续功能扩展
@@ -143,6 +145,7 @@ FantasyTown.Auth/
 ├── Program.cs                      # 启动配置、DI、中间件管道
 ├── Modules/
 │   ├── Accounts/                   # 账户模块
+│   │   ├── Admin/                  # 管理闸门：ManagementGuard / ManagementGate 过滤器
 │   │   ├── Application/            # 应用层：命令/查询处理器
 │   │   ├── Domain/                 # 领域层：实体/值对象/规则
 │   │   └── Infrastructure/         # 基础设施：密码服务/权限快照/锁定服务
@@ -153,8 +156,10 @@ FantasyTown.Auth/
 │   └── Shared/                     # 共享：Result, IClock, IClientIp, IAuditChannel
 ├── Persistence/                    # EF Core DbContext
 ├── Migrations/                     # EF Core 初始迁移（六表 InitialCreate）
-├── Middleware/                     # RejectBannedUser 中间件
-└── Pages/                          # Razor Pages：登录/注册/找回/重置
+├── Middleware/                     # 封禁拦截 / Cookie 认证 / 协议异常 JSON 兜底
+├── Pages/                          # Razor Pages：账户流程 + /admin 管理后台
+├── Tests/                          # 单元 / 集成（MariaDB+Redis）/ 契约（golden fixtures）
+└── legal/                          # 许可治理套件（GOVERNANCE + 校验脚本 + 模板）
 ```
 
 ## API 端点
@@ -207,17 +212,18 @@ FantasyTown.Auth/
 ## 安全特性
 
 - 用户枚举防护（统一话术 + 等耗时校验）
+- 封禁详情防枚举（验密通过后才向密码持有者揭示理由与截止）
 - 令牌原子签发（Redis Lua 脚本）
 - 分层限流（IP 固定窗 + 账户×IP 滑动窗）
 - 注册 IP 配额（默认每 IP 3 个账户，超出拒绝）
-- 登录失败锁定（指数退避 15 / 30 / 60 分钟）
+- 登录失败锁定（指数退避 15 / 30 / 60 分钟，Web 与 Ygg 共享 LOCKOUT 键空间）
 - 封禁用户即时拦截（PERM 快照 + RejectBannedUser 中间件）
+- 协议错误格式冻结（/api/yggdrasil 未捕获异常兜底为 JSON 500）
 - RSA-SHA1 纹理签名（authlib-injector 兼容）
 
 ## 已知限制
 
 - **邮件通道开发中**：密码重置令牌链路已就绪，但邮件发送尚未接入——当前提交"忘记密码"表单不会发出邮件；急需重置某账户密码时，可更新数据库中的密码哈希（Argon2 PHC 格式）。邮件接入已列入 Roadmap
-- **管理后台开发中**：`/admin` 管理页面随 P4 里程碑交付；当前版本封禁 / 权限调整等需直接操作数据库
 
 ## TODO List
 
@@ -279,20 +285,26 @@ FantasyTown.Auth/
 - [x] 并发保存原子化（注册竞态单次 SaveChanges 原子提交）
 - [x] Linux x64 生产环境实机验证（MariaDB socket + Redis）
 
-### P4：管理域（进行中）
+### P4：管理域 ✅
 
 - [x] ManagementGuard 三函数（CanManage / NotSelf / CanClearLockout）
-- [ ] /admin 授权策略（moderator / owner / admin）
-- [ ] /admin 区域全域 no-cache 中间件
-- [ ] 管理管线（Antiforgery → 策略 → 越权矩阵 → 二次确认 → 领域命令 → 副作用 → 审计 → PRG）
-- [ ] 敏感操作二次确认（permission-change / force-reset-password / delete 需 actor 密码）
-- [ ] 种子邮箱首个注册者自动提升为服主
-- [ ] /admin 玩家管理页（列表 / 详情 / 封禁 / 解封 / 重置纹理 / 改名）
-- [ ] /admin 用户管理页（列表 / 详情 / 封禁 / 解封 / 权限变更 / 强制重置密码 / 邮箱改绑 / 软删）
-- [ ] /admin 协管管理页（列表）
-- [ ] /admin 锁定管理页（清除锁定）
+- [x] /admin 授权策略（moderator / owner / admin）
+- [x] /admin 区域全域 no-cache 中间件
+- [x] 管理管线（Antiforgery → 策略 → 越权矩阵 → 二次确认 → 领域命令 → 副作用 → 审计 → PRG）
+- [x] 敏感操作二次确认（permission-change / force-reset-password / delete 需 actor 密码）
+- [x] 种子邮箱首个注册者自动提升为服主
+- [x] /admin 玩家管理页（列表 / 详情 / 封禁 / 解封 / 重置纹理 / 改名）
+- [x] /admin 用户管理页（列表 / 详情 / 封禁 / 解封 / 权限变更 / 强制重置密码 / 邮箱改绑 / 软删）
+- [x] /admin 协管管理页（列表）
+- [x] /admin 锁定管理页（清除锁定）
 - [x] ManagementGuard 单测（CanManage 全组合 + CanClearLockout 自我放行锚点）
-- [ ] 管理域回归测试（越权矩阵全覆盖 + 二次确认 + 审计落库）
+- [x] 管理域回归测试（越权矩阵 80-case + 即时性 3-scenario + Antiforgery 管线 HTTP 钉死）
+
+### 后续评审修订（封禁链路 + 健壮性）✅
+
+- [x] 封禁详情验密后揭示（防枚举：密码错误落统一话术，密码正确才揭示理由/截止）
+- [x] BAN_SIGNAL Redis pub/sub 广播（封禁/解封事件，供 Agent / 插件消费）
+- [x] P5 前健壮性审计修复（Web 登录锁定接线 / 字段级 null 守卫 / 协议异常 JSON 兜底 / 输入长度前置 / Ban 页 Until 校验）
 
 ### P5：加固压测
 
