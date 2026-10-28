@@ -327,4 +327,4 @@ Released under [AGPL-3.0-only](LICENSE) (single bilingual license file; the verb
 - Additional terms: [NOTICE.md](NOTICE.md) (AGPLv3 §7: **attribution · modified-version identification · source obligation**)
 - Trademark & naming: [TRADEMARK.md](TRADEMARK.md) (written-permission scheme for the FantasyTown name; Minecraft/Yggdrasil brand boundaries)
 - Commercial cooperation: [COMMERCIAL.md](COMMERCIAL.md) (independent contract offer; **does not alter AGPLv3 rights**)
-- Copyright inventory: [COPYRIGHT](COPYRIGHT) · AI declaration: [AI_DECLARATION.md](AI_DECLARATION.md)
+- Copyright inventory: [COPYRIGHT.md](COPYRIGHT.md) · AI declaration: [AI_DECLARATION.md](AI_DECLARATION.md)

@@ -327,4 +327,4 @@ FantasyTown.Auth/
 - 附加材料条款：[NOTICE.md](NOTICE.md)（AGPLv3 §7：**署名保留 · 修改版标注 · 源码义务**）
 - 商标与命名：[TRADEMARK.md](TRADEMARK.md)（FantasyTown 名号**书面申请制**；Minecraft/Yggdrasil 品牌边界）
 - 商务合作：[COMMERCIAL.md](COMMERCIAL.md)（独立合同要约，**不改变 AGPLv3 授权范围**）
-- 版权清单：[COPYRIGHT](COPYRIGHT) · AI 辅助声明：[AI_DECLARATION.md](AI_DECLARATION.md)
+- 版权清单：[COPYRIGHT.md](COPYRIGHT.md) · AI 辅助声明：[AI_DECLARATION.md](AI_DECLARATION.md)

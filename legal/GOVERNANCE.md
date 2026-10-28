@@ -28,7 +28,7 @@
 | `NOTICE.md` | AGPLv3 **§7 附加条款**（只挂本项目新增材料） | 可微调措辞，不可扩大成禁商 | 项目负责人 | 源文件头部用 `SPDX-NoticeRef` 指向 |
 | `TRADEMARK.md` | 商标／命名／品牌政策（**合同外文件**） | 可调整许可范围 | 项目负责人 | 未注册也写“保留权利”，**不标 ®** |
 | `COMMERCIAL.md` | 商业授权**独立合同要约**，不是许可证条款 | 可改报价/范围/主体 | 项目负责人（双方法签） | 写“另行书面签订”，**不写“否则侵权”** |
-| `COPYRIGHT` | 版权人清单 + 首次发表年份 + 变更史 | 只追加，不删旧行 | 任何人（PR） | Agent 合 PR 时必须同步更新 |
+| `COPYRIGHT.md` | 版权人清单 + 首次发表年份 + 变更史 | 只追加，不删旧行 | 任何人（PR） | Agent 合 PR 时必须同步更新 |
 | `THIRD_PARTY_NOTICES` | 依赖许可证归档 | 随依赖增减 | 自动化脚本 + 人复核 | 见 §6 |
 | `AI_DECLARATION.md` | AI 辅助生成说明与权属立场 | 几乎不动 | 项目负责人 | 诚实声明，不作权利主张 |
 | `VERSION` | `major.minor.patch` + commit + 日期 | 发版时 | 发布脚本 | 对齐 git tag |
@@ -179,7 +179,7 @@ CI（`.github/workflows/legal-gate.yml`）在 PR 上自动跑 **2 / 3 / 4 / 5** 
 
 ## 8. 变更这些文件，必须走 PR + 双人复核
 
-`LICENSE` · `NOTICE.md` · `TRADEMARK.md` · `COMMERCIAL.md` · `COPYRIGHT` · `GOVERNANCE.md` · `scripts/check-license-purity.sh`
+`LICENSE` · `NOTICE.md` · `TRADEMARK.md` · `COMMERCIAL.md` · `COPYRIGHT.md` · `GOVERNANCE.md` · `scripts/check-license-purity.sh`
 
 任何人（含项目负责人、含 Agent）**禁止直推 main**。PR 模板见 `.github/PULL_REQUEST_TEMPLATE/legal.md`。
 
