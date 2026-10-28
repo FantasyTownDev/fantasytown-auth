@@ -47,4 +47,14 @@ public sealed record YggErrorResponse
         Error = "IllegalArgumentException",
         ErrorMessage = "Invalid request body."
     };
+
+    /// <summary>
+    /// 服务端未预期异常（M1：/api/yggdrasil 路径异常兜底——客户端仍得冻结
+    /// {error, errorMessage} 结构而非非 JSON 空响应；authlib 官方 error 类型）。
+    /// </summary>
+    public static YggErrorResponse InternalServerError() => new()
+    {
+        Error = "InternalServerErrorException",
+        ErrorMessage = "Internal server error."
+    };
 }

@@ -315,6 +315,10 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
+// M1：Yggdrasil 协议路径异常守卫——必须在 UseExceptionHandler 之后（内层），
+// /api/yggdrasil/* 的未预期异常在此转 500 协议 JSON，不冒泡到全局 HTML 兜底
+app.UseMiddleware<YggProtocolExceptionHandler>();
+
 // T3-008：纹理端点经独立管道分支绕过 HTTPS 重定向——Minecraft 客户端不跟随 307，
 // 生产开启重定向后 /textures/* 拉取必须仍可直达（原"先注册 Map 即可"的注释为误解，
 // Map* 只注册路由并非中间件）
