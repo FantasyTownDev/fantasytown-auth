@@ -1,6 +1,6 @@
 # AI 辅助生成声明 / AI-Assisted Development Declaration
 
-> 诚实声明，不作权利主张；本文件按治理套件与 COPYRIGHT.md 的要求维护。
+> 诚实声明，不作权利主张；本文件按治理套件与 COPYRIGHTS.md 的要求维护。
 
 ## 声明 / Declaration
 
