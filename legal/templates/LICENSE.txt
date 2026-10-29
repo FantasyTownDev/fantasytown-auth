@@ -1,0 +1,22 @@
+<!-- brand-ignore-file: 本文件为治理说明/模板，内含禁用措辞的教学反例，非生效条款 -->
+GNU AFFERO GENERAL PUBLIC LICENSE
+Version 3, 19 November 2007
+
+Copyright (C) 2007 Free Software Foundation, Inc. <https://fsf.org/>
+Everyone is permitted to copy and distribute verbatim copies of this license document,
+but changing it is not allowed.
+
+[This is the standard, unmodified AGPL-3.0-only text. Do not edit, do not append
+project-specific terms. Project-specific terms live in NOTICE.md (AGPLv3 §7 only).]
+
+========================================================================
+                    GNU AFFERO GENERAL PUBLIC LICENSE
+                       Version 3, 19 November 2007
+
+[…full verbatim AGPL-3.0-only text as published by the FSF…]
+
+Preamble / TERMS AND CONDITIONS / How to Apply These Terms to Your New Programs
+(see https://www.gnu.org/licenses/agpl-3.0.txt for the canonical verbatim text)
+
+========================================================================
+SPDX-License-Identifier: AGPL-3.0-only
