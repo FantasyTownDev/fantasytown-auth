@@ -1,3 +1,41 @@
+FantasyTown.Auth · GNU AGPL v3 (AGPL-3.0-only)
+Copyright (C) 2026 FantasyTownDev. All rights reserved.
+SPDX-License-Identifier: AGPL-3.0-only
+========================================================================
+中文说明（仅供参考，非许可条款）
+Chinese Notice (For Reference Only — Not Part of the License Terms)
+========================================================================
+
+本项目（FantasyTown.Auth）以 GNU Affero General Public License,
+Version 3（AGPL-3.0-only）释出；下列中文说明仅供参考，不构成许可条款。
+========================================================================
+
+1. 正式条款 / Canonical Terms
+   下列英文全文（自 Free Software Foundation 官方文本 verbatim 收录）
+   为本项目许可的唯一正式条款；本中文说明仅为便利阅读的参考译介，
+   不构成许可条款。如中英文理解不一致，以英文原文为准。
+========================================================================
+
+2. 附加材料 / Additional Materials
+   本项目版权人新增材料的附加条款（署名保留、修改标注、衍生版标识等）
+   见仓库 NOTICE.md（依 AGPLv3 第 7 条作出）。该等条款不缩减 AGPLv3
+   所授予的任何自由。
+========================================================================
+
+3. 名称与标识 / Names and Marks
+   AGPLv3 不授予本项目名称、标识、域名及视觉识别的任何使用权，
+   相关政策见仓库 TRADEMARK.md。
+========================================================================
+
+4. 商务合作 / Commercial Cooperation
+   涉及闭源部署安排、品牌使用、技术支持等事宜，可与版权人另行商洽，
+   见仓库 COMMERCIAL.md。是否商洽不影响你依 AGPLv3 本可享有的任何权利。
+========================================================================
+
+5. 源码获取 / Source Code
+   本项目源码：https://github.com/FantasyTownDev/fantasytown-auth
+   本软件无任何担保（详见英文原文第 15-17 条）。
+========================================================================
                     GNU AFFERO GENERAL PUBLIC LICENSE
                        Version 3, 19 November 2007
 
@@ -659,37 +697,3 @@ specific requirements.
 if any, to sign a "copyright disclaimer" for the program, if necessary.
 For more information on this, and how to apply and follow the GNU AGPL, see
 <https://www.gnu.org/licenses/>.
-
-========================================================================
-FantasyTown.Auth · GNU AGPL v3 (AGPL-3.0-only)
-Copyright (C) 2026 FantasyTownDev
-SPDX-License-Identifier: AGPL-3.0-only
-========================================================================
-
-中文说明（仅供参考，非许可条款）
-Chinese Notice (For Reference Only — Not Part of the License Terms）
-
-本项目（FantasyTown.Auth）以 GNU Affero General Public License,
-Version 3（AGPL-3.0-only）释出。
-
-1. 正式条款 / Canonical Terms
-   本文件开头起的英文全文（自 Free Software Foundation 官方文本
-   verbatim 收录）为本项目许可的唯一正式条款；本中文说明仅为便利
-   阅读的参考译介，不构成许可条款。如中英文理解不一致，以英文原文为准。
-
-2. 附加材料 / Additional Materials
-   本项目版权人新增材料的附加条款（署名保留、修改标注、衍生版标识等）
-   见仓库 NOTICE.md（依 AGPLv3 第 7 条作出）。该等条款不缩减 AGPLv3
-   所授予的任何自由。
-
-3. 名称与标识 / Names and Marks
-   AGPLv3 不授予本项目名称、标识、域名及视觉识别的任何使用权，
-   相关政策见仓库 TRADEMARK.md。
-
-4. 商务合作 / Commercial Cooperation
-   涉及闭源部署安排、品牌使用、技术支持等事宜，可与版权人另行商洽，
-   见仓库 COMMERCIAL.md。是否商洽不影响你依 AGPLv3 本可享有的任何权利。
-
-5. 源码获取 / Source Code
-   本项目源码：https://github.com/FantasyTownDev/fantasytown-auth
-   本软件无任何担保（详见英文原文第 15-17 条）。
