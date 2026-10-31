@@ -80,7 +80,7 @@ AGPLv3 **不授予**以下任何商标、商号、标识、域名或配色组合
 | 2026 | FantasyTownDev | 初始版本及全部新增材料 |
 
 外部贡献者的权利归属依其签署的 DCO / CLA 确定；合并即视为同意本 NOTICE。
-完整清单维护于 [`COPYRIGHT.md`](./COPYRIGHT.md)。
+完整清单维护于 [`COPYRIGHTS.md`](./COPYRIGHTS.md)。
 
 ---
 
