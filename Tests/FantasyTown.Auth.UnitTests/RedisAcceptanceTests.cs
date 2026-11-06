@@ -1,7 +1,14 @@
+// Copyright (c) 2026 FantasyTownDev. All rights reserved.
+// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-NoticeRef: NOTICE.md
+// 本文件为 FantasyTown-Auth 项目新增材料，适用 LICENSE 与 NOTICE.md 之 AGPLv3 §7 附加条款。
+// 算法/校验/令牌签发/权重类逻辑为固定实现；任何改动将触发 AGPLv3 §13 对应源码义务。
+
 using FantasyTown.Auth.Modules.Accounts.Application.Commands;
 using FantasyTown.Auth.Modules.Accounts.Application.Queries;
 using FantasyTown.Auth.Modules.Accounts.Domain;
 using FantasyTown.Auth.Modules.Accounts.Infrastructure;
+using FantasyTown.Auth.Modules.Shared;
 using FantasyTown.Auth.Persistence;
 using Microsoft.EntityFrameworkCore;
 using StackExchange.Redis;
@@ -212,7 +219,7 @@ public class RedisAcceptanceTests : IDisposable
     public async Task LoginFailed_ShouldLockAccountViaSharedKeyspace()
     {
         using var db = CreateInMemoryDbContext();
-        var registerHandler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService());
+        var registerHandler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService(), new SiteOptions(), new InlineOwnerClaimLock());
         var username = $"lok_{Guid.NewGuid().ToString("N")[..8]}";
         var clientIp = $"10.{Random.Shared.Next(1, 255)}.{Random.Shared.Next(1, 255)}.{Random.Shared.Next(1, 255)}";
 
@@ -358,6 +365,30 @@ public class RedisAcceptanceTests : IDisposable
 
         // 清理
         await snapshot.RemoveAsync(uid);
+    }
+
+    /// <summary>
+    /// V5 §7.3 管理员清除锁定（真实 Redis）：DEL LOCKOUT:{uid} 返回原状态
+    /// </summary>
+    [Fact]
+    public async Task Lockout_ClearAsync_RemovesLockAndReportsPreviousState()
+    {
+        var uid = Random.Shared.Next(100000, 999999);
+        var email = $"clear-{uid}@test.com";
+        var ip = "127.0.0.1";
+
+        // 未锁定：清除返回 false
+        Assert.False(await _lockoutService.ClearAsync(uid));
+
+        for (int i = 0; i < 5; i++)
+        {
+            await _lockoutService.RecordFailureAsync(uid, email, ip);
+        }
+        Assert.True(await _lockoutService.IsLockedOutAsync(uid));
+
+        // 已锁定：清除返回 true 且解锁
+        Assert.True(await _lockoutService.ClearAsync(uid));
+        Assert.False(await _lockoutService.IsLockedOutAsync(uid));
     }
 
     public void Dispose()

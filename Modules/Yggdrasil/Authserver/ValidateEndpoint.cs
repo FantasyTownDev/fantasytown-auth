@@ -1,3 +1,9 @@
+// Copyright (c) 2026 FantasyTownDev. All rights reserved.
+// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-NoticeRef: NOTICE.md
+// 本文件为 FantasyTown-Auth 项目新增材料，适用 LICENSE 与 NOTICE.md 之 AGPLv3 §7 附加条款。
+// 算法/校验/令牌签发/权重类逻辑为固定实现；任何改动将触发 AGPLv3 §13 对应源码义务。
+
 using System.Text.Json;
 using FantasyTown.Auth.Modules.Yggdrasil.Protocol;
 using Microsoft.AspNetCore.Builder;
@@ -23,7 +29,7 @@ public static class ValidateEndpoint
             if (string.IsNullOrWhiteSpace(rawBody))
             {
                 context.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await context.Response.WriteAsJsonAsync(new { error = "json", errorMessage = "Invalid request body." });
+                await context.Response.WriteAsJsonAsync(YggErrorResponse.MalformedRequest());
                 return;
             }
 
@@ -36,14 +42,14 @@ public static class ValidateEndpoint
             catch (JsonException)
             {
                 context.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await context.Response.WriteAsJsonAsync(new { error = "json", errorMessage = "Invalid request body." });
+                await context.Response.WriteAsJsonAsync(YggErrorResponse.MalformedRequest());
                 return;
             }
 
             if (request == null || request.AccessToken == null)
             {
                 context.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await context.Response.WriteAsJsonAsync(new { error = "json", errorMessage = "Invalid request body." });
+                await context.Response.WriteAsJsonAsync(YggErrorResponse.MalformedRequest());
                 return;
             }
 

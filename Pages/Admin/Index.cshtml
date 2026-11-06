@@ -1,0 +1,45 @@
+@page
+@model FantasyTown.Auth.Pages.Admin.IndexModel
+@{
+    ViewData["Title"] = "仪表盘";
+}
+
+<h1>仪表盘</h1>
+
+<div class="panel">
+    <h2>生效封禁</h2>
+    <table>
+        <tr><th>维度</th><th>数量</th></tr>
+        <tr><td>被封禁用户（生效中）</td><td>@Model.BannedUsers</td></tr>
+        <tr><td>被封禁玩家</td><td>@Model.BannedPlayers</td></tr>
+    </table>
+</div>
+
+<div class="panel">
+    <h2>近期审计（auth_log）</h2>
+    @if (Model.RecentLogs.Count == 0)
+    {
+        <p class="muted">暂无记录</p>
+    }
+    else
+    {
+        <table>
+            <tr><th>时间 (UTC)</th><th>动作</th><th>操作者</th><th>目标</th><th>上下文</th></tr>
+            @foreach (var log in Model.RecentLogs)
+            {
+                <tr>
+                    <td>@log.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                    <td>@log.Action</td>
+                    <td>@log.ActorId</td>
+                    <td>@log.SubjectId</td>
+                    <td class="muted">@log.Context</td>
+                </tr>
+            }
+        </table>
+    }
+</div>
+
+<div class="panel">
+    <h2>待处理举报</h2>
+    <p class="muted">举报系统为后续里程碑功能，此处占位（§7.6 仪表盘布局）。</p>
+</div>

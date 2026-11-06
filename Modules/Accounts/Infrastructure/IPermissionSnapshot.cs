@@ -1,3 +1,9 @@
+// Copyright (c) 2026 FantasyTownDev. All rights reserved.
+// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-NoticeRef: NOTICE.md
+// 本文件为 FantasyTown-Auth 项目新增材料，适用 LICENSE 与 NOTICE.md 之 AGPLv3 §7 附加条款。
+// 算法/校验/令牌签发/权重类逻辑为固定实现；任何改动将触发 AGPLv3 §13 对应源码义务。
+
 using FantasyTown.Auth.Modules.Accounts.Domain;
 
 namespace FantasyTown.Auth.Modules.Accounts.Infrastructure;
@@ -36,22 +42,22 @@ public sealed record PermissionSnapshot
     /// 用户权限
     /// </summary>
     public UserPermission Permission { get; init; }
-    
+
     /// <summary>
     /// 是否被封禁
     /// </summary>
     public bool IsBanned { get; init; }
-    
+
     /// <summary>
     /// 封禁截止时间（null 表示永久封禁）
     /// </summary>
     public DateTime? BannedUntil { get; init; }
-    
+
     /// <summary>
     /// 封禁原因
     /// </summary>
     public string? BannedReason { get; init; }
-    
+
     /// <summary>
     /// 快照创建时间
     /// </summary>

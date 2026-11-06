@@ -1,3 +1,9 @@
+// Copyright (c) 2026 FantasyTownDev. All rights reserved.
+// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-NoticeRef: NOTICE.md
+// 本文件为 FantasyTown-Auth 项目新增材料，适用 LICENSE 与 NOTICE.md 之 AGPLv3 §7 附加条款。
+// 算法/校验/令牌签发/权重类逻辑为固定实现；任何改动将触发 AGPLv3 §13 对应源码义务。
+
 namespace FantasyTown.Auth.Modules.Accounts.Infrastructure;
 
 /// <summary>
@@ -35,6 +41,12 @@ public interface ILockoutService
     /// （FAIL_ACCT:{email} 仅审计，由窗口自然过期）
     /// </summary>
     Task ResetAsync(int uid, string email, string ip, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 管理员清除账户锁定（V5 §7.3 POST /admin/lockouts/{uid}/clear，仅 DEL LOCKOUT:{uid}，
+    /// 不触碰 FAIL_EP/FAIL_ACCT 计数）；返回是否原本处于锁定状态
+    /// </summary>
+    Task<bool> ClearAsync(int uid, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

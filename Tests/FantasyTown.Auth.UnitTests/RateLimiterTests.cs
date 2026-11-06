@@ -1,7 +1,13 @@
-using FantasyTown.Auth.Modules.Yggdrasil.Authserver;
-using FantasyTown.Auth.Modules.Yggdrasil.Protocol;
+// Copyright (c) 2026 FantasyTownDev. All rights reserved.
+// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-NoticeRef: NOTICE.md
+// 本文件为 FantasyTown-Auth 项目新增材料，适用 LICENSE 与 NOTICE.md 之 AGPLv3 §7 附加条款。
+// 算法/校验/令牌签发/权重类逻辑为固定实现；任何改动将触发 AGPLv3 §13 对应源码义务。
+
 using FantasyTown.Auth.Modules.Accounts.Domain;
 using FantasyTown.Auth.Modules.Accounts.Infrastructure;
+using FantasyTown.Auth.Modules.Yggdrasil.Authserver;
+using FantasyTown.Auth.Modules.Yggdrasil.Protocol;
 using FantasyTown.Auth.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -217,7 +223,7 @@ public class AuthenticateHandlerConcurrencyTests : IDisposable
         var tasks = new List<Task<AuthenticateResult>>();
         for (int i = 0; i < 2; i++)
         {
-            var handler = new AuthenticateHandler(_db, _passwordService, _permissionSnapshot, _lockoutService, _tokenService, yggOptions, _concurrencyLimiter);
+            var handler = new AuthenticateHandler(new TestPlayerDirectory(_db), _passwordService, _permissionSnapshot, _lockoutService, _tokenService, yggOptions, _concurrencyLimiter);
             var request = new AuthenticateRequest
             {
                 Username = "test@test.com",
@@ -238,8 +244,8 @@ public class AuthenticateHandlerConcurrencyTests : IDisposable
         var yggOptions = new YggOptions();
         var limiter = new AuthConcurrencyLimiter(maxConcurrency: 1, queueLimit: 0);
 
-        var handler1 = new AuthenticateHandler(_db, _passwordService, _permissionSnapshot, _lockoutService, _tokenService, yggOptions, limiter);
-        var handler2 = new AuthenticateHandler(_db, _passwordService, _permissionSnapshot, _lockoutService, _tokenService, yggOptions, limiter);
+        var handler1 = new AuthenticateHandler(new TestPlayerDirectory(_db), _passwordService, _permissionSnapshot, _lockoutService, _tokenService, yggOptions, limiter);
+        var handler2 = new AuthenticateHandler(new TestPlayerDirectory(_db), _passwordService, _permissionSnapshot, _lockoutService, _tokenService, yggOptions, limiter);
 
         var request = new AuthenticateRequest
         {

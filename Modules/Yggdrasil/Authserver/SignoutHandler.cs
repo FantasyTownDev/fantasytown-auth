@@ -1,33 +1,38 @@
+// Copyright (c) 2026 FantasyTownDev. All rights reserved.
+// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-NoticeRef: NOTICE.md
+// 本文件为 FantasyTown-Auth 项目新增材料，适用 LICENSE 与 NOTICE.md 之 AGPLv3 §7 附加条款。
+// 算法/校验/令牌签发/权重类逻辑为固定实现；任何改动将触发 AGPLv3 §13 对应源码义务。
+
 using FantasyTown.Auth.Modules.Accounts.Infrastructure;
-using FantasyTown.Auth.Persistence;
-using Microsoft.EntityFrameworkCore;
+using FantasyTown.Auth.Modules.Shared;
 
 namespace FantasyTown.Auth.Modules.Yggdrasil.Authserver;
 
 /// <summary>
 /// Yggdrasil signout 处理器
 /// 验密通过 → Lua 原子全吊销 ID:{email} 链
+/// 数据访问经 IPlayerDirectory（H5 模块纪律边界）。
 /// </summary>
 public sealed class SignoutHandler
 {
-    private readonly AuthDbContext _db;
+    private readonly IPlayerDirectory _directory;
     private readonly IPasswordService _passwordService;
     private readonly ITokenService _tokenService;
 
-    public SignoutHandler(AuthDbContext db, IPasswordService passwordService, ITokenService tokenService)
+    public SignoutHandler(IPlayerDirectory directory, IPasswordService passwordService, ITokenService tokenService)
     {
-        _db = db;
+        _directory = directory;
         _passwordService = passwordService;
         _tokenService = tokenService;
     }
 
     public async Task<SignoutResult> HandleAsync(string email, string password, CancellationToken cancellationToken = default)
     {
-        // 1. 查找用户
-        var user = await _db.Users
-            .FirstOrDefaultAsync(u => u.Email == email && !u.IsDeleted, cancellationToken);
+        // 1. 查找账户（软删经目录的全局查询过滤器不可见——与原 !IsDeleted 查询等价）
+        var account = await _directory.FindAccountByEmailAsync(email, cancellationToken);
 
-        if (user == null)
+        if (account == null)
         {
             // 用户不存在，VerifyPasswordAsync 内部对空哈希走 dummy Argon2 + 等耗时，防枚举（T3-009）
             await _passwordService.VerifyPasswordAsync(password, string.Empty, cancellationToken);
@@ -35,7 +40,7 @@ public sealed class SignoutHandler
         }
 
         // 2. 验证密码（异步路径，与登录侧等耗时）
-        var passwordValid = await _passwordService.VerifyPasswordAsync(password, user.Password, cancellationToken);
+        var passwordValid = await _passwordService.VerifyPasswordAsync(password, account.PasswordHash, cancellationToken);
         if (!passwordValid)
         {
             return SignoutResult.Invalid();

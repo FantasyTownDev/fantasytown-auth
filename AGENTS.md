@@ -110,6 +110,8 @@ test(integration): add concurrent registration test
 | `main` | 生产就绪代码，只接受 PR 合并 | `main` |
 | `develop` | 开发主线，集成各功能分支 | `develop` |
 | `feature/*` | 新功能开发 | `feature/<模块>-<简述>` |
+| `docs/*` | 文档 / 许可治理等非代码变更（无源码改动） | `docs/<主题>-<简述>` |
+| `chore/*` | 非实质性维护变更（版权注释补齐 / 依赖升级 / 格式化等，逻辑不变） | `chore/<主题>-<简述>` |
 | `fix/*` | Bug 修复 | `fix/<模块>-<简述>` |
 | `hotfix/*` | 生产紧急修复 | `hotfix/<简述>` |
 | `release/*` | 发布准备 | `release/<版本号>` |
@@ -120,6 +122,8 @@ test(integration): add concurrent registration test
 feature/auth-register
 feature/ygg-authenticate
 feature/admin-player-mgmt
+docs/license-governance
+chore/source-copyright-headers
 fix/cache-perm-snapshot
 fix/db-concurrent-registration
 ```
@@ -133,8 +137,9 @@ fix/db-concurrent-registration
 
 ### 提交规范
 
-- 分支内使用约定式提交（见上方 Conventional Commits 规范）
-- 合并提交使用 squash merge，保留干净的提交历史
+- 分支内使用约定式提交（见上方 Conventional Commits 规范），并遵守上方颗粒度要求（行级 > 文件级 > 功能块级）
+- 合并回 develop/main 使用 **merge commit**（`Merge pull request #N from ...`），保留分支内颗粒度提交历史；禁止 squash merge——其会抹掉颗粒度提交，与本节颗粒度要求矛盾（规则于 PR-11~14 实践评审后修订）
+- merge commit 的 body 须撰写（参考 PR #14 格式）：分节汇总本 PR 变更 + 验证数据 + `Source: 分支 → 目标分支` + 依赖/顺序说明
 
 ## Architecture
 

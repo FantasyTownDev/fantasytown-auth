@@ -1,3 +1,9 @@
+// Copyright (c) 2026 FantasyTownDev. All rights reserved.
+// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-NoticeRef: NOTICE.md
+// 本文件为 FantasyTown-Auth 项目新增材料，适用 LICENSE 与 NOTICE.md 之 AGPLv3 §7 附加条款。
+// 算法/校验/令牌签发/权重类逻辑为固定实现；任何改动将触发 AGPLv3 §13 对应源码义务。
+
 namespace FantasyTown.Auth.Modules.Accounts.Domain;
 
 /// <summary>
@@ -16,10 +22,10 @@ public static class BanRules
     {
         // 未激活的封禁记录不生效
         if (!isActive) return false;
-        
+
         // 激活且无截止时间 = 永久封禁
         if (bannedUntil is null) return true;
-        
+
         // 激活且截止时间在未来 = 临时封禁未到期
         return bannedUntil.Value > nowUtc;
     }
@@ -42,5 +48,17 @@ public static class BanRules
         if (bannedUntil is null) return null; // 永久封禁
         var remaining = (bannedUntil.Value - nowUtc).TotalSeconds;
         return remaining > 0 ? remaining : 0;
+    }
+
+    /// <summary>
+    /// 封禁揭示文案（V5 §6.5/§4.4 评审修订：验密通过后向账号持有者披露封禁状态与原因）。
+    /// 仅由调用方在密码校验通过后使用；期限展示与管理端 Detail 页格式一致（yyyy-MM-dd HH:mm:ss）。
+    /// </summary>
+    public static string RevealMessage(DateTime? bannedUntil, string? reason)
+    {
+        var term = bannedUntil.HasValue ? $"截止 {bannedUntil.Value:yyyy-MM-dd HH:mm:ss}" : "永久";
+        return string.IsNullOrEmpty(reason)
+            ? $"账号已被封禁（{term}）"
+            : $"账号已被封禁：{reason}（{term}）";
     }
 }

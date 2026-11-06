@@ -1,7 +1,14 @@
+// Copyright (c) 2026 FantasyTownDev. All rights reserved.
+// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-NoticeRef: NOTICE.md
+// 本文件为 FantasyTown-Auth 项目新增材料，适用 LICENSE 与 NOTICE.md 之 AGPLv3 §7 附加条款。
+// 算法/校验/令牌签发/权重类逻辑为固定实现；任何改动将触发 AGPLv3 §13 对应源码义务。
+
 using FantasyTown.Auth.Modules.Accounts.Application.Commands;
 using FantasyTown.Auth.Modules.Accounts.Application.Queries;
 using FantasyTown.Auth.Modules.Accounts.Domain;
 using FantasyTown.Auth.Modules.Accounts.Infrastructure;
+using FantasyTown.Auth.Modules.Shared;
 using FantasyTown.Auth.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -33,7 +40,7 @@ public class AcceptanceTests
     public async Task ConcurrentRegistration_SameUsername_LogicallyOnlyOneSucceeds()
     {
         using var db = CreateInMemoryDbContext();
-        var handler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService());
+        var handler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService(), new SiteOptions(), new InlineOwnerClaimLock());
         var username = "concurrent_user";
         var tasks = new List<Task<RegisterUserResult>>();
 
@@ -90,7 +97,7 @@ public class AcceptanceTests
     public async Task BannedUser_LoginRejected()
     {
         using var db = CreateInMemoryDbContext();
-        var registerHandler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService());
+        var registerHandler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService(), new SiteOptions(), new InlineOwnerClaimLock());
 
         // 注册用户
         var registerResult = await registerHandler.HandleAsync(new RegisterUserCommand
@@ -134,7 +141,7 @@ public class AcceptanceTests
     public async Task SoftDeletedUser_LoginRejected()
     {
         using var db = CreateInMemoryDbContext();
-        var registerHandler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService());
+        var registerHandler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService(), new SiteOptions(), new InlineOwnerClaimLock());
 
         // 注册用户
         var registerResult = await registerHandler.HandleAsync(new RegisterUserCommand
@@ -171,7 +178,7 @@ public class AcceptanceTests
     public async Task SeedEmail_FirstRegistration_GetsOwnerPermission()
     {
         using var db = CreateInMemoryDbContext();
-        var handler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService());
+        var handler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService(), new SiteOptions { SeedOwnerEmail = "owner@fantasytown.com" }, new InlineOwnerClaimLock());
 
         // 模拟种子邮箱（第一次注册）
         var seedEmail = "owner@fantasytown.com";
@@ -197,7 +204,7 @@ public class AcceptanceTests
     public async Task SeedEmail_SecondRegistration_DoesNotGetOwnerPermission()
     {
         using var db = CreateInMemoryDbContext();
-        var handler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService());
+        var handler = new RegisterUserHandler(db, _passwordService, new InMemoryRegistrationQuotaService(), new SiteOptions { SeedOwnerEmail = "owner@fantasytown.com" }, new InlineOwnerClaimLock());
 
         // 第一次注册（种子邮箱）
         await handler.HandleAsync(new RegisterUserCommand

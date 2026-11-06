@@ -1,3 +1,9 @@
+// Copyright (c) 2026 FantasyTownDev. All rights reserved.
+// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-NoticeRef: NOTICE.md
+// 本文件为 FantasyTown-Auth 项目新增材料，适用 LICENSE 与 NOTICE.md 之 AGPLv3 §7 附加条款。
+// 算法/校验/令牌签发/权重类逻辑为固定实现；任何改动将触发 AGPLv3 §13 对应源码义务。
+
 using System.Text.Json;
 using FantasyTown.Auth.Modules.Accounts.Domain;
 using FantasyTown.Auth.Modules.Accounts.Infrastructure;
@@ -336,7 +342,7 @@ public class HasJoinedHandlerTests : IDisposable
         _ticketService = new InMemoryTicketService();
         _playerCache = new InMemoryPlayerCache();
         _signingService = new InMemorySigningService();
-        _handler = new HasJoinedHandler(_db, _ticketService, _playerCache, _signingService, new YggOptions());
+        _handler = new HasJoinedHandler(new TestPlayerDirectory(_db), _ticketService, _playerCache, _signingService, new YggOptions());
     }
 
     public void Dispose() => _db.Dispose();
@@ -496,7 +502,7 @@ public class ProfileHandlerTests : IDisposable
         _db = new AuthDbContext(options);
         _playerCache = new InMemoryPlayerCache();
         _signingService = new InMemorySigningService();
-        _handler = new ProfileHandler(_db, _playerCache, _signingService, new YggOptions());
+        _handler = new ProfileHandler(new TestPlayerDirectory(_db), _playerCache, _signingService, new YggOptions());
     }
 
     public void Dispose() => _db.Dispose();

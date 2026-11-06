@@ -1,20 +1,26 @@
+// Copyright (c) 2026 FantasyTownDev. All rights reserved.
+// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-NoticeRef: NOTICE.md
+// 本文件为 FantasyTown-Auth 项目新增材料，适用 LICENSE 与 NOTICE.md 之 AGPLv3 §7 附加条款。
+// 算法/校验/令牌签发/权重类逻辑为固定实现；任何改动将触发 AGPLv3 §13 对应源码义务。
+
 using FantasyTown.Auth.Modules.Accounts.Domain;
 using FantasyTown.Auth.Modules.Accounts.Infrastructure;
 using FantasyTown.Auth.Modules.Shared;
-using FantasyTown.Auth.Modules.Yggdrasil.Authserver;
 using FantasyTown.Auth.Modules.Yggdrasil.Protocol;
-using FantasyTown.Auth.Persistence;
-using Microsoft.EntityFrameworkCore;
 
 namespace FantasyTown.Auth.Modules.Yggdrasil.Authserver;
 
 /// <summary>
 /// Yggdrasil authenticate 处理器
-/// 流程：封禁前置免验密 → LOCKOUT → 验密 → 原子签发 Token
+/// 流程：封禁前置判定（暂存）→ LOCKOUT → 验密 → 封禁/哨兵揭示 → 原子签发 Token
+/// 数据访问经 IPlayerDirectory（H5 模块纪律边界）；封禁/权限判定经 PERM 快照。
+/// V5 §6.5 评审修订：封禁详情仅向密码持有者披露——密码错误沿用统一话术，
+/// 封禁账户与正常账户的凭据错误面同文案同计时（防枚举），详见 HandleCoreAsync 内注释。
 /// </summary>
 public sealed class AuthenticateHandler
 {
-    private readonly AuthDbContext _db;
+    private readonly IPlayerDirectory _directory;
     private readonly IPasswordService _passwordService;
     private readonly IPermissionSnapshot _permissionSnapshot;
     private readonly ILockoutService _lockoutService;
@@ -23,7 +29,7 @@ public sealed class AuthenticateHandler
     private readonly AuthConcurrencyLimiter _concurrencyLimiter;
 
     public AuthenticateHandler(
-        AuthDbContext db,
+        IPlayerDirectory directory,
         IPasswordService passwordService,
         IPermissionSnapshot permissionSnapshot,
         ILockoutService lockoutService,
@@ -31,7 +37,7 @@ public sealed class AuthenticateHandler
         YggOptions options,
         AuthConcurrencyLimiter concurrencyLimiter)
     {
-        _db = db;
+        _directory = directory;
         _passwordService = passwordService;
         _permissionSnapshot = permissionSnapshot;
         _lockoutService = lockoutService;
@@ -45,7 +51,8 @@ public sealed class AuthenticateHandler
         // 0. 并发许可检查
         if (!_concurrencyLimiter.TryAcquire())
         {
-            return AuthenticateResult.Forbidden("Rate limit exceeded. Too many concurrent requests.");
+            // T3-014：不向客户端泄露内部并发调度细节，统一文案
+            return AuthenticateResult.Forbidden("Forbidden.");
         }
 
         try
@@ -60,11 +67,11 @@ public sealed class AuthenticateHandler
 
     private async Task<AuthenticateResult> HandleCoreAsync(AuthenticateRequest request, string clientIp, CancellationToken cancellationToken)
     {
-        // 1. 查找用户（仅支持邮箱）
-        var user = await _db.Users
-            .FirstOrDefaultAsync(u => u.Email == request.Username, cancellationToken);
+        // 1. 查找账户（仅支持邮箱；软删经目录的全局查询过滤器不可见——
+        //    返回 null 走统一防枚举分支，替代原先的显式 IsDeleted 检查）
+        var account = await _directory.FindAccountByEmailAsync(request.Username, cancellationToken);
 
-        if (user == null)
+        if (account == null)
         {
             // 用户不存在：仅记 FAIL_ACCT 审计维度（V5 §6.6，不触发锁定），执行等耗时 dummy hash 防枚举
             await _lockoutService.RecordUnknownAccountFailureAsync(request.Username, cancellationToken);
@@ -72,57 +79,72 @@ public sealed class AuthenticateHandler
             return AuthenticateResult.Forbidden("Invalid credentials. Invalid username or password.");
         }
 
-        // 2. 检查是否被软删除
-        if (user.IsDeleted)
-        {
-            await _passwordService.VerifyPasswordAsync(request.Password, string.Empty, cancellationToken);
-            return AuthenticateResult.Forbidden("Invalid credentials. Invalid username or password.");
-        }
-
-        // 3. 封禁前置检查 (M9) — 不验密，节省 CPU；null 快照按封禁等效哨兵拒绝（C3 / V5 N2）
-        var snapshot = await _permissionSnapshot.GetAsync(user.Uid, cancellationToken);
-        if (snapshot == null || BanRules.IsBanEffective(snapshot.IsBanned, snapshot.BannedUntil, DateTime.UtcNow))
-        {
-            return AuthenticateResult.Forbidden("Invalid credentials. Invalid username or password.");
-        }
+        // 3. 封禁前置判定（防错 #17：先 PERM 判定再验密；M9 回源与用户查询合并一次 DB 读）——
+        //    判定结果暂存、不立即拒绝：验密通过后才揭示封禁详情（V5 §6.5 评审修订），
+        //    密码错误沿用统一话术，封禁与正常账户的凭据错误面同文案同时序（防枚举，§8）。
+        //    null 快照按封禁等效哨兵拒绝（C3 / V5 N2）。
+        var snapshot = await _permissionSnapshot.GetAsync(account.Uid, cancellationToken);
+        var banEffective = snapshot != null
+            && BanRules.IsBanEffective(snapshot.IsBanned, snapshot.BannedUntil, DateTime.UtcNow);
+        var missingSnapshot = snapshot == null;
 
         // 4. LOCKOUT 检查（LOCKOUT:{uid}，Web 与 Ygg authenticate 共享键空间）
-        if (await _lockoutService.IsLockedOutAsync(user.Uid, cancellationToken))
+        if (await _lockoutService.IsLockedOutAsync(account.Uid, cancellationToken))
         {
             return AuthenticateResult.Forbidden("Invalid credentials. Invalid username or password.");
         }
 
         // 5. 时序一致的密码验证
-        var passwordValid = await _passwordService.VerifyPasswordAsync(request.Password, user.Password, cancellationToken);
+        var passwordValid = await _passwordService.VerifyPasswordAsync(request.Password, account.PasswordHash, cancellationToken);
 
         if (!passwordValid)
         {
             // 记录失败：FAIL_EP:{email}:{ip}（同 IP 窗口 ≥5 触发 LOCKOUT）+ FAIL_ACCT:{email}（审计）
-            await _lockoutService.RecordFailureAsync(user.Uid, user.Email, clientIp, cancellationToken);
+            await _lockoutService.RecordFailureAsync(account.Uid, account.Email, clientIp, cancellationToken);
 
             return AuthenticateResult.Forbidden("Invalid credentials. Invalid username or password.");
         }
 
         // 6. 密码正确，清除 LOCKOUT:{uid} 与 FAIL_EP:{email}:{ip}
-        await _lockoutService.ResetAsync(user.Uid, user.Email, clientIp, cancellationToken);
+        await _lockoutService.ResetAsync(account.Uid, account.Email, clientIp, cancellationToken);
 
-        // 7. 查找玩家信息
-        var player = user.Player;
-        if (player == null)
+        // 6.5 封禁/哨兵揭示（仅向密码持有者披露；过期封禁 IsBanEffective=false 已落入正常登录）：
+        //     until 取判定同源的 PERM 快照，reason 取 account 行（同查询附带，零额外 DB 读）；
+        //     PERM null 哨兵不伪造封禁理由，给可联系管理员的状态异常文案。
+        if (missingSnapshot)
         {
-            // 没有玩家记录，查询 Players 表
-            player = await _db.Players
-                .FirstOrDefaultAsync(p => p.Uid == user.Uid, cancellationToken);
+            return AuthenticateResult.Forbidden("账号状态异常，请联系管理员");
+        }
+        if (banEffective)
+        {
+            return AuthenticateResult.Forbidden(
+                BanRules.RevealMessage(snapshot!.BannedUntil, account.BannedReason));
         }
 
-        // 8. 如果玩家没有 UUID，生成一个
+        // 7. 解析玩家（当前冻结 schema：一用户一角色，取首个；多角色为后续演进）
+        var players = (await _directory.GetProfilesByUserAsync(account.Uid, cancellationToken)).ToList();
+        var player = players.Count > 0 ? players[0] : null;
+
+        // 8. 如果玩家没有 UUID，按配置算法分配（条件更新仅对空 UUID 生效）
         string? profileId = null;
         if (player != null && string.IsNullOrEmpty(player.Uuid))
         {
             var newUuid = UuidGenerator.Generate(_options.UuidAlgorithm, player.Name);
-            player.Uuid = newUuid;
-            await _db.SaveChangesAsync(cancellationToken);
-            profileId = newUuid;
+            if (await _directory.AssignUuidAsync(player.Pid, newUuid, cancellationToken))
+            {
+                profileId = newUuid;
+                // 本地列表同步已分配 UUID，保持 availableProfiles 一致
+                players = players
+                    .Select(p => p.Pid == player.Pid ? p with { Uuid = newUuid } : p)
+                    .ToList();
+            }
+            else
+            {
+                // 并发竞争中 UUID 已被其他请求分配（条件更新 0 行）：重取实际值
+                // （原直接 SaveChanges 路径在该竞争下会抛 1062 → 500）
+                players = (await _directory.GetProfilesByUserAsync(account.Uid, cancellationToken)).ToList();
+                profileId = players.Count > 0 ? players[0].Uuid : null;
+            }
         }
         else if (player != null)
         {
@@ -130,10 +152,9 @@ public sealed class AuthenticateHandler
         }
 
         // 9. 获取该用户的所有玩家 profiles
-        var profiles = await _db.Players
-            .Where(p => p.Uid == user.Uid)
+        var profiles = players
             .Select(p => new ProfileInfo { Id = p.Uuid, Name = p.Name })
-            .ToListAsync(cancellationToken);
+            .ToList();
 
         // 10. 自动选择 profile（单个时自动选择）
         ProfileInfo? selectedProfile = profiles.Count == 1 ? profiles[0] : null;
@@ -149,13 +170,13 @@ public sealed class AuthenticateHandler
             }
         }
 
-        // 11. 原子签发 Token
+        // 11. 原子签发 Token（role 为账户权限元数据；授权判定仍走 PERM 快照）
         var token = await _tokenService.IssueAsync(
-            uid: user.Uid,
-            email: user.Email,
+            uid: account.Uid,
+            email: account.Email,
             clientToken: request.ClientToken,
             profileId: selectedProfile?.Id,
-            role: (byte)user.Permission,
+            role: account.Permission,
             cancellationToken);
 
         return AuthenticateResult.Success(new AuthenticateResponse

@@ -1,3 +1,9 @@
+// Copyright (c) 2026 FantasyTownDev. All rights reserved.
+// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-NoticeRef: NOTICE.md
+// 本文件为 FantasyTown-Auth 项目新增材料，适用 LICENSE 与 NOTICE.md 之 AGPLv3 §7 附加条款。
+// 算法/校验/令牌签发/权重类逻辑为固定实现；任何改动将触发 AGPLv3 §13 对应源码义务。
+
 namespace FantasyTown.Auth.Modules.Shared;
 
 /// <summary>
@@ -30,6 +36,43 @@ public interface IPlayerDirectory
     /// UUID 算法可配置（v3 确定性或 v4 随机）。
     /// </summary>
     ValueTask<bool> AssignUuidAsync(int pid, string uuid, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 按邮箱查找账户（大小写规则随 DB collation）。
+    /// 用于：authenticate、signout 的凭据校验入口。
+    /// 软删账户不可见（全局查询过滤器生效）——返回 null 等同"账户不存在"，
+    /// 调用方按统一话术 + 等耗时 dummy 校验防枚举。
+    /// </summary>
+    ValueTask<AccountInfo?> FindAccountByEmailAsync(string email, CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// 跨模块边界传递的账户信息 DTO（Yggdrasil 凭据校验所需最小面）。
+/// 封禁/权限判定不在此面内——统一走 PERM 快照（IPermissionSnapshot）。
+/// </summary>
+public sealed record AccountInfo
+{
+    /// <summary>账户主键</summary>
+    public required int Uid { get; init; }
+
+    /// <summary>邮箱（Yggdrasil 用户名）</summary>
+    public required string Email { get; init; }
+
+    /// <summary>密码哈希（仅用于恒定时间校验，禁止外泄）</summary>
+    public required string PasswordHash { get; init; }
+
+    /// <summary>是否已验证邮箱</summary>
+    public required bool Verified { get; init; }
+
+    /// <summary>权限级别原始字节（UserPermission 枚举值）——仅作令牌签发的元数据携带；
+    /// 授权判定一律走 PERM 快照，不经此面</summary>
+    public required byte Permission { get; init; }
+
+    /// <summary>封禁理由（V5 §6.5 评审修订：authenticate 验密通过后向账号持有者揭示；未封禁/无理由为 null）</summary>
+    public string? BannedReason { get; init; }
+
+    /// <summary>封禁截止时间（null = 永久封禁或未封禁）——揭示文案与判定同源一致性由写路径保证</summary>
+    public DateTime? BannedUntil { get; init; }
 }
 
 /// <summary>
@@ -58,7 +101,7 @@ public sealed record PlayerInfo
     /// null = 永久封禁，非 null = 临时封禁到期时间。
     /// R2 约束保证该记录恒唯一。
     /// </summary>
-    DateTimeOffset? BannedUntil { get; init; }
+    public DateTimeOffset? BannedUntil { get; init; }
 
     /// <summary>皮肤纹理 ID（null = 无皮肤）</summary>
     public int? TidSkin { get; init; }

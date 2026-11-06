@@ -1,3 +1,9 @@
+// Copyright (c) 2026 FantasyTownDev. All rights reserved.
+// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-NoticeRef: NOTICE.md
+// 本文件为 FantasyTown-Auth 项目新增材料，适用 LICENSE 与 NOTICE.md 之 AGPLv3 §7 附加条款。
+// 算法/校验/令牌签发/权重类逻辑为固定实现；任何改动将触发 AGPLv3 §13 对应源码义务。
+
 using System.Text;
 using System.Text.Json;
 using FantasyTown.Auth.Modules.Shared;
@@ -25,7 +31,7 @@ public static class AuthenticateEndpoint
             if (string.IsNullOrWhiteSpace(rawBody))
             {
                 context.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await context.Response.WriteAsJsonAsync(new { error = "json", errorMessage = "Invalid request body." });
+                await context.Response.WriteAsJsonAsync(YggErrorResponse.MalformedRequest());
                 return;
             }
 
@@ -39,14 +45,24 @@ public static class AuthenticateEndpoint
             catch (JsonException)
             {
                 context.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await context.Response.WriteAsJsonAsync(new { error = "json", errorMessage = "Invalid request body." });
+                await context.Response.WriteAsJsonAsync(YggErrorResponse.MalformedRequest());
                 return;
             }
 
             if (request == null)
             {
                 context.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await context.Response.WriteAsJsonAsync(new { error = "json", errorMessage = "Invalid request body." });
+                await context.Response.WriteAsJsonAsync(YggErrorResponse.MalformedRequest());
+                return;
+            }
+
+            // 2.5 字段级 null 守卫（对齐 join：required 对显式 null 不拦截，
+            //     穿透到 Argon2.Verify 会抛 ArgumentNullException → 非协议 500；
+            //     且 username:null 会先写 FAIL_ACCT: 空后缀键污染键空间）
+            if (request.Username == null || request.Password == null)
+            {
+                context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                await context.Response.WriteAsJsonAsync(YggErrorResponse.MalformedRequest());
                 return;
             }
 
@@ -57,8 +73,9 @@ public static class AuthenticateEndpoint
             var ipLimiter = context.RequestServices.GetRequiredService<IRateLimiter>();
             if (!await ipLimiter.IsAllowedAsync(clientIp))
             {
+                // T3-014：不向客户端泄露内部限流机制，统一 ForbiddenOperationException 默认文案
                 context.Response.StatusCode = StatusCodes.Status403Forbidden;
-                await context.Response.WriteAsJsonAsync(YggErrorResponse.Forbidden("Rate limit exceeded."));
+                await context.Response.WriteAsJsonAsync(YggErrorResponse.Forbidden());
                 return;
             }
 

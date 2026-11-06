@@ -1,0 +1,128 @@
+@page
+@model FantasyTown.Auth.Pages.Admin.Users.UsersDetailModel
+@{
+    ViewData["Title"] = "用户详情";
+    var target = Model.Target;
+}
+
+<h1>用户详情 <small class="muted">#@target.Uid</small></h1>
+
+<div class="panel">
+    <table>
+        <tr><th>邮箱</th><th>权限</th><th>状态</th><th>注册 (UTC)</th></tr>
+        <tr>
+            <td>@target.Email</td>
+            <td>@target.Permission @(Model.IsModeratorTarget ? Html.Raw("<span class=\"badge badge-ok\">协管</span>") : null)</td>
+            <td>
+                @if (target.IsBanned) { <span class="badge badge-banned">封禁中</span> }
+                @if (target.IsDeleted) { <span class="badge badge-banned">已软删</span> }
+                @if (!target.IsBanned && !target.IsDeleted) { <span class="badge badge-ok">正常</span> }
+            </td>
+            <td>@target.RegisterAt.ToString("yyyy-MM-dd HH:mm")</td>
+        </tr>
+    </table>
+    @if (target.IsBanned)
+    {
+        <p class="muted">封禁截止：@(target.BannedUntil?.ToString("yyyy-MM-dd HH:mm:ss") ?? "永久")　理由：@target.BannedReason</p>
+    }
+</div>
+
+@if (Model.CanManageTarget || Model.CanClearLockout)
+{
+    <div class="panel">
+        <h2>操作</h2>
+
+        @if (Model.CanManageTarget)
+        {
+            <form method="post" asp-antiforgery="true" action="/admin/users/@target.Uid/ban" class="inline">
+                <input type="hidden" name="returnUrl" value="/admin/users/@target.Uid" />
+                <input type="text" name="reason" placeholder="封禁理由" required maxlength="255" />
+                <input type="datetime-local" name="until" title="截止时间，留空为永久" />
+                <button type="submit" class="danger">封禁用户</button>
+            </form>
+            <form method="post" asp-antiforgery="true" action="/admin/users/@target.Uid/unban" class="inline">
+                <button type="submit">解封用户</button>
+            </form>
+
+            <form method="post" asp-antiforgery="true" action="/admin/users/@target.Uid/permission" class="inline">
+                <select name="newPermission">
+                    <option value="NormalPlayer">普通玩家</option>
+                    <option value="ServerModerator">协管</option>
+                </select>
+                <input type="password" name="currentPassword" placeholder="当前密码确认（★）" required />
+                <button type="submit">变更权限</button>
+            </form>
+
+            <form method="post" asp-antiforgery="true" action="/admin/users/@target.Uid/email" class="inline">
+                <input type="email" name="newEmail" placeholder="新邮箱" required />
+                <button type="submit">改绑邮箱</button>
+            </form>
+        }
+
+        @if (Model.CanClearLockout)
+        {
+            <form method="post" asp-antiforgery="true" action="/admin/lockouts/@target.Uid/clear" class="inline">
+                <button type="submit">解除账号锁定</button>
+            </form>
+        }
+
+        @if (Model.CanSensitive)
+        {
+            <form method="post" asp-antiforgery="true" action="/admin/users/@target.Uid/force-reset-password" class="inline">
+                <input type="password" name="currentPassword" placeholder="当前密码确认（★）" required />
+                <button type="submit" class="danger">强制重置密码</button>
+            </form>
+            <form method="post" asp-antiforgery="true" action="/admin/users/@target.Uid/delete" class="inline">
+                <input type="password" name="currentPassword" placeholder="当前密码确认（★）" required />
+                <button type="submit" class="danger">软删账户</button>
+            </form>
+        }
+    </div>
+}
+
+<div class="panel">
+    <h2>名下玩家</h2>
+    @if (Model.TargetPlayers.Count == 0)
+    {
+        <p class="muted">无玩家</p>
+    }
+    else
+    {
+        <table>
+            <tr><th>PID</th><th>角色名</th><th>UUID</th><th>状态</th><th></th></tr>
+            @foreach (var p in Model.TargetPlayers)
+            {
+                <tr>
+                    <td>@p.Pid</td>
+                    <td>@p.Name</td>
+                    <td class="muted">@(p.Uuid.Length > 12 ? p.Uuid[..12] + "…" : p.Uuid)</td>
+                    <td>@(p.IsBanned ? "封禁中" : "正常")</td>
+                    <td><a href="/admin/players/@p.Pid" style="color:#00d4ff;">详情</a></td>
+                </tr>
+            }
+        </table>
+    }
+</div>
+
+<div class="panel">
+    <h2>近期审计（最近 20 条）</h2>
+    @if (Model.RecentLogs.Count == 0)
+    {
+        <p class="muted">无记录</p>
+    }
+    else
+    {
+        <table>
+            <tr><th>时间 (UTC)</th><th>动作</th><th>操作者</th><th>上下文</th></tr>
+            @foreach (var log in Model.RecentLogs)
+            {
+                <tr>
+                    <td>@log.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                    <td>@log.Action</td>
+                    <td>@log.ActorId</td>
+                    <td class="muted">@log.Context</td>
+                </tr>
+            }
+        </table>
+    }
+</div>

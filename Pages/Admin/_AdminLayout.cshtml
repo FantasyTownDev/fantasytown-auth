@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - FantasyTown 管理后台</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #16162a; color: #e0e0e0; min-height: 100vh; }
+        header { background: #1a1a2e; border-bottom: 1px solid #2a2a4a; padding: 0.8rem 1.5rem; display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap; }
+        header .brand { color: #00d4ff; font-weight: bold; font-size: 1.15rem; text-decoration: none; }
+        header nav { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+        header nav a { color: #a0a0c0; text-decoration: none; padding: 0.4rem 0.8rem; border-radius: 5px; font-size: 0.95rem; }
+        header nav a:hover { background: #2a2a4a; color: #e0e0e0; }
+        header nav a.active { background: #00d4ff; color: #16162a; font-weight: bold; }
+        main { max-width: 1100px; margin: 1.5rem auto; padding: 0 1rem; }
+        .msg { padding: 0.7rem 1rem; border-radius: 6px; margin-bottom: 1rem; }
+        .msg-ok { background: #10331a; border: 1px solid #2eaa50; color: #7fe0a0; }
+        .msg-err { background: #331015; border: 1px solid #aa2e3c; color: #f08a96; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 1.5rem; background: #1a1a2e; border-radius: 8px; overflow: hidden; }
+        th, td { padding: 0.6rem 0.8rem; text-align: left; border-bottom: 1px solid #2a2a4a; font-size: 0.92rem; }
+        th { background: #20203a; color: #00d4ff; }
+        tr:hover td { background: #1f1f38; }
+        h1 { font-size: 1.5rem; margin-bottom: 1rem; color: #00d4ff; }
+        h2 { font-size: 1.15rem; margin: 1.2rem 0 0.6rem; color: #c0c0e0; }
+        form.inline { display: inline; }
+        input, select, textarea { background: #101024; border: 1px solid #3a3a5a; color: #e0e0e0; border-radius: 5px; padding: 0.45rem 0.6rem; font-size: 0.92rem; }
+        button { background: #00d4ff; color: #16162a; border: none; border-radius: 5px; padding: 0.45rem 0.9rem; font-weight: bold; cursor: pointer; font-size: 0.9rem; }
+        button:hover { background: #00b8d4; }
+        button.danger { background: #d43a50; color: #fff; }
+        button.danger:hover { background: #b02a40; }
+        .searchbar { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+        .muted { color: #8080a0; font-size: 0.85rem; }
+        .badge { display: inline-block; padding: 0.1rem 0.5rem; border-radius: 10px; font-size: 0.8rem; }
+        .badge-banned { background: #4a1020; color: #f08a96; }
+        .badge-ok { background: #10331a; color: #7fe0a0; }
+        .panel { background: #1a1a2e; border: 1px solid #2a2a4a; border-radius: 8px; padding: 1rem; margin-bottom: 1.2rem; }
+    </style>
+</head>
+<body>
+<header>
+    <a class="brand" href="/admin">FantasyTown 管理后台</a>
+    <nav>
+        @if (ViewData["NavModerator"] as bool? == true)
+        {
+            <a href="/admin">仪表盘</a>
+            <a href="/admin/players">玩家</a>
+            <a href="/admin/lockouts">账号锁定</a>
+        }
+        @if (ViewData["NavOwner"] as bool? == true)
+        {
+            <a href="/admin/users">用户</a>
+            <a href="/admin/moderators">协管</a>
+        }
+    </nav>
+</header>
+<main>
+    @if (TempData["Message"] is string okMessage)
+    {
+        <div class="msg msg-ok">@okMessage</div>
+    }
+    @if (TempData["Error"] is string errorMessage)
+    {
+        <div class="msg msg-err">@errorMessage</div>
+    }
+    @RenderBody()
+</main>
+</body>
+</html>

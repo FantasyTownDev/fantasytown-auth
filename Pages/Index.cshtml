@@ -1,4 +1,5 @@
 @page
+@model FantasyTown.Auth.Pages.IndexModel
 @{
     ViewData["Title"] = "首页";
 }
@@ -31,6 +32,10 @@
             <a asp-page="/Account/Login" class="btn-login">登录</a>
             <a asp-page="/Account/Register" class="btn-register">注册</a>
         </div>
+        @if (Model.ShowAdminEntry)
+        {
+            <p style="margin-top: 2rem;"><a href="/admin" class="btn-register">进入管理后台</a></p>
+        }
     </div>
 </body>
 </html>

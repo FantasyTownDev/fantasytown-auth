@@ -1,3 +1,9 @@
+// Copyright (c) 2026 FantasyTownDev. All rights reserved.
+// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-NoticeRef: NOTICE.md
+// 本文件为 FantasyTown-Auth 项目新增材料，适用 LICENSE 与 NOTICE.md 之 AGPLv3 §7 附加条款。
+// 算法/校验/令牌签发/权重类逻辑为固定实现；任何改动将触发 AGPLv3 §13 对应源码义务。
+
 using FantasyTown.Auth.Middleware;
 using FantasyTown.Auth.Modules.Accounts.Application.Queries;
 using FantasyTown.Auth.Modules.Accounts.Infrastructure;
@@ -14,17 +20,20 @@ public class LoginModel : PageModel
     private readonly IPasswordService _passwordService;
     private readonly IPermissionSnapshot _permissionSnapshot;
     private readonly IClientIp _clientIp;
+    private readonly ILockoutService _lockoutService;
 
     public LoginModel(
         AuthDbContext db,
         IPasswordService passwordService,
         IPermissionSnapshot permissionSnapshot,
-        IClientIp clientIp)
+        IClientIp clientIp,
+        ILockoutService lockoutService)
     {
         _db = db;
         _passwordService = passwordService;
         _permissionSnapshot = permissionSnapshot;
         _clientIp = clientIp;
+        _lockoutService = lockoutService;
     }
 
     [BindProperty]
@@ -55,7 +64,7 @@ public class LoginModel : PageModel
 
         var clientIp = _clientIp.GetClientIp() ?? "unknown";
 
-        var handler = new LoginHandler(_db, _passwordService, _permissionSnapshot);
+        var handler = new LoginHandler(_db, _passwordService, _permissionSnapshot, _lockoutService);
         var query = new LoginQuery
         {
             Username = Input.Username,

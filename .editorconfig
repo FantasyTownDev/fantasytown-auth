@@ -1,0 +1,39 @@
+# EditorConfig — 统一 IDE 与 `dotnet format` 的格式约定（唯一真相）
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.{yml,yaml,json,csproj,slnx,props,targets}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.cs]
+# 换行：Allman 大括号（与现有代码一致）
+csharp_new_line_before_open_brace = all
+csharp_new_line_before_else = true
+csharp_new_line_before_catch = true
+csharp_new_line_before_finally = true
+csharp_new_line_before_members_in_object_initializers = true
+csharp_new_line_before_members_in_anonymous_types = true
+csharp_preserve_single_line_blocks = true
+csharp_preserve_single_line_statements = true
+
+# using：置于命名空间外，按字母序，System 优先
+csharp_using_directive_placement = outside_namespace:warning
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = false
+
+# 命名空间：file-scoped（与现有代码一致）
+csharp_style_namespace_declarations = file_scoped:suggestion
+
+# 空白清理（dotnet format whitespace 强制项）
+csharp_space_after_cast = false
+csharp_space_after_keywords_in_control_flow_statements = true

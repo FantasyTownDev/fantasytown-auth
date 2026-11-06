@@ -1,3 +1,9 @@
+// Copyright (c) 2026 FantasyTownDev. All rights reserved.
+// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-NoticeRef: NOTICE.md
+// 本文件为 FantasyTown-Auth 项目新增材料，适用 LICENSE 与 NOTICE.md 之 AGPLv3 §7 附加条款。
+// 算法/校验/令牌签发/权重类逻辑为固定实现；任何改动将触发 AGPLv3 §13 对应源码义务。
+
 using FantasyTown.Auth.Modules.Accounts.Infrastructure;
 
 namespace FantasyTown.Auth.UnitTests;
@@ -46,5 +52,37 @@ public class InMemoryLockoutBackoffTests
         // 第 4 次触发 → 仍封顶 60min（不无限退避，§6.6 DoS 权衡）
         await svc.RecordFailureAsync(uid, email, ip);
         Assert.InRange((await svc.GetRemainingLockoutSecondsAsync(uid))!.Value, 3550, 3600);
+    }
+}
+
+public class InMemoryLockoutClearTests
+{
+    /// <summary>
+    /// V5 §7.3 管理员清除锁定：仅删 LOCKOUT 键并返回原状态，失败计数窗保留
+    /// </summary>
+    [Fact]
+    public async Task ClearAsync_RemovesLockAndReportsPreviousState()
+    {
+        var svc = new InMemoryLockoutService();
+        var uid = 7001;
+        var email = "clear@test.com";
+        var ip = "127.0.0.1";
+
+        // 未锁定：清除返回 false
+        Assert.False(await svc.ClearAsync(uid));
+
+        for (int i = 0; i < 5; i++)
+        {
+            await svc.RecordFailureAsync(uid, email, ip);
+        }
+        Assert.True(await svc.IsLockedOutAsync(uid));
+
+        // 已锁定：清除返回 true 且解锁
+        Assert.True(await svc.ClearAsync(uid));
+        Assert.False(await svc.IsLockedOutAsync(uid));
+
+        // 失败计数窗未被触碰（再犯提醒语境）：再 1 次失败即重新达阈值
+        var result = await svc.RecordFailureAsync(uid, email, ip);
+        Assert.Equal(6, result.FailureCount);
     }
 }
